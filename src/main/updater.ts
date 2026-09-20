@@ -1,21 +1,23 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { app, BrowserWindow, ipcMain } from "electron";
 import { autoUpdater, UpdateInfo } from "electron-updater";
+import { existsSync } from "fs";
 import { join } from "path";
 import { IpcEvents, UpdaterIpcEvents } from "shared/IpcEvents";
 import { Millis } from "shared/utils/millis";
 
+import { loadView } from "./mooncordStatic";
 import { State } from "./settings";
 import { handle } from "./utils/ipcWrappers";
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
-import { loadView } from "./vesktopStatic";
 
 let updaterWindow: BrowserWindow | null = null;
+const updaterReady = app.isPackaged && existsSync(join(process.resourcesPath, "app-update.yml"));
 
 autoUpdater.on("update-available", update => {
     if (State.store.updater?.ignoredVersion === update.version) return;
@@ -34,17 +36,26 @@ autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = false;
 autoUpdater.fullChangelog = true;
 
-const isOutdated = autoUpdater.checkForUpdates().then(res => Boolean(res?.isUpdateAvailable));
+const isOutdated = updaterReady
+    ? autoUpdater
+          .checkForUpdates()
+          .then(res => Boolean(res?.isUpdateAvailable))
+          .catch(error => {
+              console.warn("Mooncord updater is unavailable:", error);
+              return false;
+          })
+    : Promise.resolve(false);
 
 handle(IpcEvents.UPDATER_IS_OUTDATED, () => isOutdated);
 handle(IpcEvents.UPDATER_OPEN, async () => {
+    if (!updaterReady) return;
     const res = await autoUpdater.checkForUpdates();
     if (res?.isUpdateAvailable && res.updateInfo) openUpdater(res.updateInfo);
 });
 
 function openUpdater(update: UpdateInfo) {
     updaterWindow = new BrowserWindow({
-        title: "Vesktop Updater",
+        title: "Mooncord Updater",
         autoHideMenuBar: true,
         webPreferences: {
             preload: join(__dirname, "updaterPreload.js")

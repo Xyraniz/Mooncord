@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -9,7 +9,7 @@ import { currentSettings } from "renderer/components/ScreenSharePicker";
 import { State } from "renderer/settings";
 import { isLinux } from "renderer/utils";
 
-const logger = new Logger("VesktopStreamFixes");
+const logger = new Logger("MooncordStreamFixes");
 
 if (isLinux) {
     const original = navigator.mediaDevices.getDisplayMedia;

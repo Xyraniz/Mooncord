@@ -1,30 +1,26 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { app } from "electron";
-import { existsSync, mkdirSync } from "fs";
-import { dirname, join } from "path";
+import { mkdirSync } from "fs";
+import { join, resolve } from "path";
 
 import { CommandLine } from "./cli";
 
-const vesktopDir = dirname(process.execPath);
+app.setName("Mooncord");
 
-export const PORTABLE =
-    process.platform === "win32" &&
-    !process.execPath.toLowerCase().endsWith("electron.exe") &&
-    !existsSync(join(vesktopDir, "Uninstall Vesktop.exe"));
-
-// electron-builder's portable launcher sets this to the directory containing
-// the user's portable executable. Using dirname(process.execPath) here points
-// at the temporary extraction directory of the inner Electron binary, which
-// is deleted on exit and loses settings, cookies and session caches.
-const portableDataRoot = process.env.PORTABLE_EXECUTABLE_DIR || vesktopDir;
-
+// Keep user data independent from the executable location. This also fixes
+// portable builds whose temporary extraction directory disappears on exit.
+// MOONCORD_USER_DATA_DIR is an intentional diagnostic override; the old
+// VENCORD_USER_DATA_DIR remains accepted for compatibility with Vencord.
+const localAppData = process.env.LOCALAPPDATA || resolve(app.getPath("appData"), "..", "Local");
 export const DATA_DIR =
-    process.env.VENCORD_USER_DATA_DIR || (PORTABLE ? join(portableDataRoot, "Data") : join(app.getPath("userData")));
+    process.env.MOONCORD_USER_DATA_DIR || process.env.VENCORD_USER_DATA_DIR || join(localAppData, "Mooncord");
+
+app.setPath("userData", DATA_DIR);
 
 mkdirSync(DATA_DIR, { recursive: true });
 
@@ -37,7 +33,7 @@ export const VENCORD_QUICKCSS_FILE = join(VENCORD_SETTINGS_DIR, "quickCss.css");
 export const VENCORD_SETTINGS_FILE = join(VENCORD_SETTINGS_DIR, "settings.json");
 export const VENCORD_THEMES_DIR = join(DATA_DIR, "themes");
 
-export const USER_AGENT = `Vesktop/${app.getVersion()} (https://github.com/Vencord/Vesktop)`;
+export const USER_AGENT = `Mooncord/${app.getVersion()} (https://github.com/Xyraniz/Mooncord)`;
 
 // dimensions shamelessly stolen from Discord Desktop :3
 export const MIN_WIDTH = 940;

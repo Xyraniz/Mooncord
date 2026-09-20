@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -17,10 +17,10 @@ import { AutoStartToggle } from "./AutoStartToggle";
 import { DeveloperOptionsButton } from "./DeveloperOptions";
 import { DiscordBranchPicker } from "./DiscordBranchPicker";
 import { ImportVencordSettings } from "./ImportVencordSettings";
+import { MooncordSettingsSwitch } from "./MooncordSettingsSwitch";
 import { NotificationBadgeToggle } from "./NotificationBadgeToggle";
-import { OutdatedVesktopWarning } from "./OutdatedVesktopWarning";
+import { OutdatedMooncordWarning } from "./OutdatedMooncordWarning";
 import { UserAssetsButton } from "./UserAssets";
-import { VesktopSettingsSwitch } from "./VesktopSettingsSwitch";
 import { WindowsTransparencyControls } from "./WindowsTransparencyControls";
 
 interface BooleanSetting {
@@ -34,6 +34,28 @@ interface BooleanSetting {
 export const cl = classNameFactory("vcd-settings-");
 
 export type SettingsComponent = ComponentType<{ settings: typeof Settings.store }>;
+
+function TabHibernationDelay({ settings }: { settings: typeof Settings.store }) {
+    return (
+        <div className={cl("setting-row")}>
+            <div>
+                <BaseText weight="semibold">Tiempo antes de suspender una pestaña</BaseText>
+                <BaseText size="sm">Minutos sin interacción antes de descargar el renderer en segundo plano.</BaseText>
+            </div>
+            <input
+                type="number"
+                min={1}
+                max={240}
+                value={settings.tabHibernateAfterMinutes}
+                aria-label="Minutos antes de suspender una pestaña"
+                onChange={event => {
+                    const value = Math.min(240, Math.max(1, Number(event.currentTarget.value) || 1));
+                    settings.tabHibernateAfterMinutes = value;
+                }}
+            />
+        </div>
+    );
+}
 
 const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>> = {
     "Discord Branch": [DiscordBranchPicker],
@@ -50,7 +72,14 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
             description:
                 "Enable hardware video acceleration. This can improve performance of screenshare and video playback, but may cause graphical glitches and infinitely loading streams.",
             disabled: () => !Settings.store.hardwareAcceleration
-        }
+        },
+        {
+            key: "enableTabHibernation",
+            title: "Suspensión automática de pestañas",
+            description:
+                "Descarga pestañas inactivas para ahorrar memoria. No suspende pestañas con llamadas, multimedia, grabación, transmisión o cargas activas."
+        },
+        TabHibernationDelay
     ],
     "User Interface": [
         {
@@ -61,7 +90,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "staticTitle",
             title: "Static Title",
-            description: 'Makes the window title "Vesktop" instead of changing to the current page'
+            description: 'Makes the window title "Mooncord" instead of changing to the current page'
         },
         {
             key: "enableMenu",
@@ -85,7 +114,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
             key: "enableSplashScreen",
             title: "Enable Splash Screen",
             description:
-                "Shows a small splash screen while Vesktop is loading. Disabling this option will show the main window earlier while it's still loading."
+                "Shows a small splash screen while Mooncord is loading. Disabling this option will show the main window earlier while it's still loading."
         },
         {
             key: "splashTheming",
@@ -99,20 +128,20 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "tray",
             title: "Tray Icon",
-            description: "Add a tray icon for Vesktop",
+            description: "Add a tray icon for Mooncord",
             invisible: () => isMac
         },
         {
             key: "minimizeToTray",
             title: "Minimize to tray",
-            description: "Hitting X will make Vesktop minimize to the tray instead of closing",
+            description: "Hitting X will make Mooncord minimize to the tray instead of closing",
             invisible: () => isMac,
             disabled: () => !Settings.store.tray
         },
         {
             key: "clickTrayToShowHide",
             title: "Hide/Show on tray click",
-            description: "Left clicking tray icon will toggle the vesktop window visibility."
+            description: "Left clicking tray icon will toggle the mooncord window visibility."
         },
         {
             key: "disableMinSize",
@@ -143,7 +172,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         {
             key: "openLinksWithElectron",
             title: "Open Links in app (experimental)",
-            description: "Opens links in a new Vesktop window instead of your web browser"
+            description: "Opens links in a new Mooncord window instead of your web browser"
         },
 
         WebRTCIPHandlingPolicyPicker
@@ -170,7 +199,7 @@ function SettingsSections() {
                     if (invisible?.()) return null;
 
                     return (
-                        <VesktopSettingsSwitch
+                        <MooncordSettingsSwitch
                             title={title}
                             description={description}
                             disabled={disabled?.()}
@@ -192,13 +221,13 @@ export default ErrorBoundary.wrap(
     function SettingsUI() {
         return (
             <section>
-                <OutdatedVesktopWarning />
+                <OutdatedMooncordWarning />
                 <SettingsSections />
             </section>
         );
     },
     {
         message:
-            "Failed to render the Vesktop Settings tab. If this issue persists, try to right click the Vesktop tray icon, then click 'Repair Vencord'. And make sure your Vesktop is up to date."
+            "Failed to render the Mooncord Settings tab. If this issue persists, try to right click the Mooncord tray icon, then click 'Repair Vencord'. And make sure your Mooncord is up to date."
     }
 );

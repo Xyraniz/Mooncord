@@ -54,7 +54,7 @@
 
 <body>
     <div class="wrapper">
-        <img draggable="false" src="vesktop://assets/splash" alt="" role="presentation" />
+        <img draggable="false" src="mooncord://assets/splash" alt="" role="presentation" />
         <p>Cargando Mooncord...</p>
         <p class="message"></p>
     </div>
@@ -63,7 +63,7 @@
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         const messageElement = document.querySelector('.message');
-        VesktopSplashNative.onUpdateMessage(message => {
+        MooncordSplashNative.onUpdateMessage(message => {
             messageElement.textContent = message;
         })
     });

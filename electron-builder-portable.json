@@ -1,7 +1,7 @@
 {
     "appId": "dev.mooncord.client",
-    "productName": "Mooncord Client",
-    "executableName": "mooncord-client",
+    "productName": "Mooncord",
+    "executableName": "mooncord",
     "directories": {
         "output": "dist-portable"
     },

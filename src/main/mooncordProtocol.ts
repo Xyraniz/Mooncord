@@ -1,23 +1,23 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { app, protocol } from "electron";
 
-import { handleVesktopAssetsProtocol } from "./userAssets";
-import { handleVesktopStaticProtocol } from "./vesktopStatic";
+import { handleMooncordStaticProtocol } from "./mooncordStatic";
+import { handleMooncordAssetsProtocol } from "./userAssets";
 
 app.whenReady().then(() => {
-    protocol.handle("vesktop", async req => {
+    protocol.handle("mooncord", async req => {
         const url = new URL(req.url);
 
         switch (url.hostname) {
             case "assets":
-                return handleVesktopAssetsProtocol(url.pathname, req);
+                return handleMooncordAssetsProtocol(url.pathname, req);
             case "static":
-                return handleVesktopStaticProtocol(url.pathname, req);
+                return handleMooncordStaticProtocol(url.pathname, req);
             default:
                 return new Response(null, { status: 404 });
         }
@@ -26,7 +26,7 @@ app.whenReady().then(() => {
 
 protocol.registerSchemesAsPrivileged([
     {
-        scheme: "vesktop",
+        scheme: "mooncord",
         privileges: {
             standard: true,
             secure: true,

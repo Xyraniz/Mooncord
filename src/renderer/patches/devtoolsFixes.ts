@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vesktop contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -31,7 +31,7 @@ addPatch({
                 },
                 {
                     match: /\b\i\.window\.setDevtoolsCallbacks/g,
-                    replace: "VesktopNative.win.setDevtoolsCallbacks"
+                    replace: "MooncordNative.win.setDevtoolsCallbacks"
                 }
             ]
         }

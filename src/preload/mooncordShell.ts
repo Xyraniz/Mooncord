@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -26,6 +26,9 @@ export interface MooncordShellNativeApi {
     goBack(): Promise<void>;
     goForward(): Promise<void>;
     reload(): Promise<void>;
+    reloadTab(id: string): Promise<MooncordTabsState>;
+    openTabDevTools(id: string): Promise<void>;
+    waitForTab(id: string): Promise<void>;
     minimize(): Promise<void>;
     maximize(): Promise<void>;
     closeWindow(): Promise<void>;
@@ -81,6 +84,9 @@ html, body { background: #191b20; color: #f1f3f8; height: 100%; margin: 0; overf
 #${SHELL_ID} .mooncord-tab-rename { background: #111419; border: 1px solid #687184; border-radius: 4px; color: white; flex: 1 1 auto; font: inherit; min-width: 0; outline: none; padding: 3px 4px; }
 #${SHELL_ID} .mooncord-tab-close { border-radius: 5px; flex: 0 0 auto; font-size: 15px; height: 22px; opacity: .75; width: 22px; }
 #${SHELL_ID} .mooncord-tab-close:hover { background: rgba(255,255,255,.13); opacity: 1; }
+#${SHELL_ID} .mooncord-tab-warning { background: rgba(220, 164, 72, .14); border: 1px solid rgba(220, 164, 72, .35); border-radius: 5px; display: inline-flex; gap: 2px; padding: 2px; }
+#${SHELL_ID} .mooncord-tab-warning button { font-size: 10px; height: 21px; padding: 0 4px; }
+#${SHELL_ID} .mooncord-tab.suspended { opacity: .75; }
 #${SHELL_ID} .mooncord-add { flex: 0 0 auto; font-size: 20px; height: 32px; margin-left: 1px; width: 30px; }
 #${SHELL_ID} .mooncord-tools { position: relative; }
 #${SHELL_ID} .mooncord-tools-menu { background: #292c33; border: 1px solid #434751; border-radius: 9px; box-shadow: 0 12px 30px rgba(0,0,0,.45); display: none; min-width: 200px; padding: 5px; position: absolute; right: 0; top: 38px; }
@@ -117,7 +123,7 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
         shell.id = SHELL_ID;
         const brand = document.createElement("div");
         brand.className = "mooncord-brand";
-        brand.innerHTML = `<span class="mooncord-mark"><img src="vesktop://static/discord.png" alt="" /></span><span class="mooncord-brand-copy"><span class="mooncord-brand-name">Mooncord</span><span class="mooncord-brand-status"><span class="mooncord-status-dot"></span>Discord</span></span>`;
+        brand.innerHTML = `<span class="mooncord-mark"><img src="mooncord://static/discord.png" alt="" /></span><span class="mooncord-brand-copy"><span class="mooncord-brand-name">Mooncord</span><span class="mooncord-brand-status"><span class="mooncord-status-dot"></span>Discord</span></span>`;
         const nav = document.createElement("div");
         nav.className = "mooncord-nav";
         nav.append(
@@ -159,6 +165,10 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
         let currentState: MooncordTabsState = { tabs: [], activeId: "" };
         let lastSignature = "";
         let lastActiveId = "";
+        const tabElements = new Map<
+            string,
+            { root: HTMLElement; icon: HTMLElement; label: HTMLElement; close: HTMLButtonElement; warning: HTMLElement }
+        >();
         addTabButton.addEventListener("click", event => {
             event.stopPropagation();
             if (currentState.tabs.length >= MAX_MOONCORD_TABS) {
@@ -191,60 +201,102 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
             if (signature === lastSignature) return;
             lastSignature = signature;
             const previousScrollLeft = tabsContainer.scrollLeft;
-            tabsContainer.replaceChildren();
+            const currentIds = new Set(state.tabs.map(tab => tab.id));
+            for (const [id, element] of tabElements) {
+                if (currentIds.has(id)) continue;
+                element.root.remove();
+                tabElements.delete(id);
+            }
             for (const tab of state.tabs) {
-                const tabElement = document.createElement("div");
-                tabElement.className = `mooncord-tab${tab.id === state.activeId ? " active" : ""}`;
-                tabElement.setAttribute("role", "tab");
+                let elements = tabElements.get(tab.id);
+                if (!elements) {
+                    const tabElement = document.createElement("div");
+                    const icon = document.createElement("span");
+                    const label = document.createElement("span");
+                    const close = createButton("mooncord-tab-close", "×", "Cerrar pestaña", "close-tab");
+                    const warning = document.createElement("span");
+                    tabElement.className = "mooncord-tab";
+                    tabElement.setAttribute("role", "tab");
+                    icon.className = "mooncord-tab-icon";
+                    label.className = "mooncord-tab-label";
+                    warning.className = "mooncord-tab-warning";
+                    close.draggable = false;
+                    label.addEventListener("dblclick", event => {
+                        event.stopPropagation();
+                        beginRename(tab.id, label.textContent || "", tabElement, label);
+                    });
+                    close.addEventListener("click", event => {
+                        event.stopPropagation();
+                        runNative("cerrar la pestaña", () => native.closeTab(tab.id));
+                    });
+                    tabElement.addEventListener("click", () =>
+                        runNative("seleccionar la pestaña", () => native.selectTab(tab.id))
+                    );
+                    tabElement.addEventListener("dragstart", event => {
+                        if ((event.target as HTMLElement).closest("button, input")) {
+                            event.preventDefault();
+                            return;
+                        }
+                        event.dataTransfer?.setData("text/plain", tab.id);
+                        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+                    });
+                    tabElement.addEventListener("dragover", event => {
+                        event.preventDefault();
+                        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                    });
+                    tabElement.addEventListener("drop", event => {
+                        event.preventDefault();
+                        const sourceId = event.dataTransfer?.getData("text/plain");
+                        if (!sourceId || sourceId === tab.id) return;
+                        const rect = tabElement.getBoundingClientRect();
+                        void native
+                            .reorderTab(sourceId, tab.id, event.clientX >= rect.left + rect.width / 2)
+                            .catch(error => console.error("No se pudo reordenar la pestaña de Mooncord:", error));
+                    });
+                    tabElement.append(icon, label, warning, close);
+                    elements = { root: tabElement, icon, label, close, warning };
+                    tabElements.set(tab.id, elements);
+                }
+                const { root: tabElement, icon, label, close, warning } = elements;
+                tabElement.className = `mooncord-tab${tab.id === state.activeId ? " active" : ""}${tab.loadStatus === "suspended" ? " suspended" : ""}`;
                 tabElement.setAttribute("aria-selected", String(tab.id === state.activeId));
                 const displayTitle = tab.customTitle || tab.title;
-                const crashed = tab.loadStatus === "crashed";
-                tabElement.title = crashed
-                    ? `${tab.path} · Renderer detenido. Haz clic para volver a cargar.`
-                    : `${tab.path} · Doble clic para cambiar el nombre; arrastra para reordenar.`;
-                tabElement.setAttribute("aria-label", crashed ? `${displayTitle}, pestaña detenida` : displayTitle);
-                tabElement.draggable = true;
-                const icon = document.createElement("span");
-                icon.className = "mooncord-tab-icon";
-                icon.textContent = crashed ? "!" : tab.id === state.activeId ? "●" : "○";
-                const label = document.createElement("span");
-                label.className = "mooncord-tab-label";
-                label.textContent = displayTitle;
-                label.addEventListener("dblclick", event => {
-                    event.stopPropagation();
-                    beginRename(tab.id, displayTitle, tabElement, label);
-                });
-                const close = createButton("mooncord-tab-close", "×", `Cerrar ${displayTitle}`, "close-tab");
-                close.addEventListener("click", event => {
-                    event.stopPropagation();
-                    runNative("cerrar la pestaña", () => native.closeTab(tab.id));
-                });
-                close.draggable = false;
-                tabElement.append(icon, label, close);
-                tabElement.addEventListener("click", () =>
-                    runNative("seleccionar la pestaña", () => native.selectTab(tab.id))
+                const stopped = tab.loadStatus === "crashed" || tab.loadStatus === "unresponsive";
+                const suspended = tab.loadStatus === "suspended";
+                tabElement.title = stopped
+                    ? `${tab.path} · Discord no responde. Usa los controles de recuperación.`
+                    : suspended
+                      ? `${tab.path} · Pestaña suspendida para ahorrar memoria. Haz clic para restaurarla.`
+                      : `${tab.path} · Doble clic para cambiar el nombre; arrastra para reordenar.`;
+                tabElement.setAttribute(
+                    "aria-label",
+                    stopped
+                        ? `${displayTitle}, Discord no responde`
+                        : suspended
+                          ? `${displayTitle}, suspendida`
+                          : displayTitle
                 );
-                tabElement.addEventListener("dragstart", event => {
-                    if ((event.target as HTMLElement).closest("button, input")) {
-                        event.preventDefault();
-                        return;
-                    }
-                    event.dataTransfer?.setData("text/plain", tab.id);
-                    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
-                });
-                tabElement.addEventListener("dragover", event => {
-                    event.preventDefault();
-                    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-                });
-                tabElement.addEventListener("drop", event => {
-                    event.preventDefault();
-                    const sourceId = event.dataTransfer?.getData("text/plain");
-                    if (!sourceId || sourceId === tab.id) return;
-                    const rect = tabElement.getBoundingClientRect();
-                    void native
-                        .reorderTab(sourceId, tab.id, event.clientX >= rect.left + rect.width / 2)
-                        .catch(error => console.error("No se pudo reordenar la pestaña de Mooncord:", error));
-                });
+                tabElement.draggable = true;
+                label.textContent = displayTitle;
+                close.setAttribute("aria-label", `Cerrar ${displayTitle}`);
+                icon.textContent =
+                    tab.loadStatus === "crashed"
+                        ? "!"
+                        : tab.loadStatus === "unresponsive"
+                          ? "⚠"
+                          : suspended
+                            ? "Z"
+                            : tab.id === state.activeId
+                              ? "●"
+                              : "○";
+                warning.replaceChildren();
+                if (tab.loadStatus === "unresponsive" || tab.loadStatus === "crashed") {
+                    const wait = createButton("", "Esperar", "Esperar a Discord", "wait-tab");
+                    const reload = createButton("", "Recargar", "Recargar esta pestaña", "reload-tab");
+                    const devtools = createButton("", "DevTools", "Abrir DevTools de esta pestaña", "devtools-tab");
+                    for (const button of [wait, reload, devtools]) button.dataset.tabId = tab.id;
+                    warning.append(wait, reload, devtools);
+                }
                 tabsContainer.appendChild(tabElement);
             }
             tabsContainer.scrollLeft = previousScrollLeft;
@@ -289,8 +341,25 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
         };
 
         shell.addEventListener("click", event => {
-            const action = (event.target as HTMLElement).closest<HTMLElement>("[data-action]")?.dataset.action;
+            const actionElement = (event.target as HTMLElement).closest<HTMLElement>("[data-action]");
+            const action = actionElement?.dataset.action;
             if (!action) return;
+            const tabId = actionElement?.dataset.tabId;
+            if (action === "wait-tab" && tabId) {
+                event.stopPropagation();
+                runNative("esperar a Discord", () => native.waitForTab(tabId));
+                return;
+            }
+            if (action === "reload-tab" && tabId) {
+                event.stopPropagation();
+                runNative("recargar la pestaña", () => native.reloadTab(tabId));
+                return;
+            }
+            if (action === "devtools-tab" && tabId) {
+                event.stopPropagation();
+                runNative("abrir DevTools de la pestaña", () => native.openTabDevTools(tabId));
+                return;
+            }
             if (action === "back") runNative("volver", () => native.goBack());
             if (action === "forward") runNative("avanzar", () => native.goForward());
             if (action === "reload") runNative("recargar la pestaña", () => native.reload());

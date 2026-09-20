@@ -1,12 +1,12 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { Settings } from "./settings";
 
-export const DefaultVesktopSettings: Settings = {
+export const DefaultMooncordSettings: Settings = {
     discordBranch: "stable",
     hardwareAcceleration: true,
     hardwareVideoAcceleration: false,
@@ -29,5 +29,7 @@ export const DefaultVesktopSettings: Settings = {
     splashPixelated: false,
     webRTCIPHandlingPolicy: "default",
     appBadge: true,
-    transparencyOption: "none"
+    transparencyOption: "none",
+    enableTabHibernation: true,
+    tabHibernateAfterMinutes: 15
 };

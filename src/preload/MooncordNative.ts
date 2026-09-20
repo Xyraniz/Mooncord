@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -26,7 +26,7 @@ let onDevtoolsClose = () => {};
 ipcRenderer.on(IpcEvents.DEVTOOLS_OPENED, () => onDevtoolsOpen());
 ipcRenderer.on(IpcEvents.DEVTOOLS_CLOSED, () => onDevtoolsClose());
 
-export const VesktopNative = {
+export const MooncordNative = {
     app: {
         relaunch: () => invoke<void>(IpcEvents.RELAUNCH),
         getVersion: () => sendSync<void>(IpcEvents.GET_VERSION),
@@ -36,11 +36,11 @@ export const VesktopNative = {
         isOutdated: () => invoke<boolean>(IpcEvents.UPDATER_IS_OUTDATED),
         openUpdater: () => invoke<void>(IpcEvents.UPDATER_OPEN),
         // used by vencord
-        getRendererCss: () => invoke<string>(IpcEvents.GET_VESKTOP_RENDERER_CSS),
+        getRendererCss: () => invoke<string>(IpcEvents.GET_MOONCORD_RENDERER_CSS),
         onRendererCssUpdate: (cb: (newCss: string) => void) => {
             if (!IS_DEV) return;
 
-            ipcRenderer.on(IpcEvents.VESKTOP_RENDERER_CSS_UPDATE, (_e, newCss: string) => cb(newCss));
+            ipcRenderer.on(IpcEvents.MOONCORD_RENDERER_CSS_UPDATE, (_e, newCss: string) => cb(newCss));
         }
     },
     autostart: {
@@ -110,5 +110,8 @@ export const VesktopNative = {
             ipcRenderer.on(IpcEvents.IPC_COMMAND, (_, message) => cb(message));
         },
         respond: (response: IpcResponse) => ipcRenderer.send(IpcEvents.IPC_COMMAND, response)
+    },
+    tabActivity: {
+        report: (activity: Record<string, boolean>) => ipcRenderer.send(IpcEvents.MOONCORD_TAB_ACTIVITY, activity)
     }
 };

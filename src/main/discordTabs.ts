@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -24,6 +24,7 @@ import {
 } from "shared/mooncordTabs";
 
 import { BrowserUserAgent } from "./constants";
+import { attachMooncordDebugConsoleMessages, mooncordDebug } from "./debug";
 import { AppEvents } from "./events";
 import { Settings, State } from "./settings";
 import { updateSplashMessage } from "./splash";
@@ -40,11 +41,18 @@ const HIDE_DISCORD_WINDOW_CHROME = `
 `;
 
 interface DiscordTab extends MooncordTabRecord {
-    view: WebContentsView;
+    view?: WebContentsView;
     loadStatus: MooncordTabInfo["loadStatus"];
     loadGeneration: number;
     retryAttempt: number;
     retryTimer?: ReturnType<typeof setTimeout>;
+    crashRecoveryAttempted: boolean;
+    lastInteractionAt: number;
+    activity: {
+        callActive: boolean;
+        mediaActive: boolean;
+        uploadActive: boolean;
+    };
 }
 
 let shellWindow: BrowserWindow | undefined;
@@ -53,6 +61,7 @@ let activeId = "";
 let didEmitAppLoaded = false;
 let persistedTabsSignature = JSON.stringify(State.store.mooncordTabs ?? []);
 let persistedActiveId = State.store.activeMooncordTabId;
+let hibernationTimer: ReturnType<typeof setInterval> | undefined;
 
 function discordOrigin() {
     const branch = Settings.store.discordBranch;
@@ -118,7 +127,7 @@ function updateBounds() {
     if (!shellWindow || shellWindow.isDestroyed()) return;
     const [width, height] = shellWindow.getContentSize();
     const bounds = getMooncordTabBounds(width, height);
-    activeTab()?.view.setBounds(bounds);
+    activeTab()?.view?.setBounds(bounds);
 }
 
 function activeTab() {
@@ -126,7 +135,7 @@ function activeTab() {
 }
 
 function sendToTab(tab: DiscordTab, channel: IpcEvents, ...args: unknown[]) {
-    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.send(channel, ...args);
+    if (tab.view && !tab.view.webContents.isDestroyed()) tab.view.webContents.send(channel, ...args);
 }
 
 function emitAppLoaded() {
@@ -137,7 +146,8 @@ function emitAppLoaded() {
 }
 
 function loadTab(tab: DiscordTab, automaticRetry = false) {
-    if (!canLoadMooncordTab(tab.loadStatus) || tab.view.webContents.isDestroyed()) return;
+    if (!tab.view || !canLoadMooncordTab(tab.loadStatus) || tab.view.webContents.isDestroyed()) return;
+    const { view } = tab;
     if (!automaticRetry) tab.retryAttempt = 0;
     if (tab.retryTimer) clearTimeout(tab.retryTimer);
     tab.retryTimer = undefined;
@@ -146,17 +156,20 @@ function loadTab(tab: DiscordTab, automaticRetry = false) {
     const url = `${discordOrigin()}${safePath(tab.path)}`;
     updateSplashMessage("Conectando con Discord...");
 
-    tab.view.webContents
+    view.webContents
         .loadURL(url)
         .then(() => {
             if (tab.loadGeneration !== loadGeneration || tab.loadStatus === "crashed") return;
             tab.loadStatus = "loaded";
             tab.retryAttempt = 0;
+            tab.crashRecoveryAttempted = false;
+            tab.lastInteractionAt = Date.now();
+            applyTabScheduling(tab);
             emitAppLoaded();
             broadcastState();
         })
         .catch(error => {
-            if (tab.view.webContents.isDestroyed()) return;
+            if (view.webContents.isDestroyed()) return;
             if (tab.loadGeneration !== loadGeneration || tab.loadStatus === "crashed") return;
             tab.loadStatus = "idle";
             broadcastState();
@@ -191,6 +204,48 @@ function updateTabFromNavigation(tab: DiscordTab, url: string) {
     }
 }
 
+function touchTab(tab: DiscordTab) {
+    tab.lastInteractionAt = Date.now();
+}
+
+function isTabBusy(tab: DiscordTab) {
+    return tab.activity.callActive || tab.activity.mediaActive || tab.activity.uploadActive;
+}
+
+function applyTabScheduling(tab: DiscordTab) {
+    if (!tab.view || tab.view.webContents.isDestroyed()) return;
+    const shouldThrottle = tab.id !== activeId && !isTabBusy(tab);
+    tab.view.webContents.setBackgroundThrottling(shouldThrottle);
+}
+
+function canHibernate(tab: DiscordTab) {
+    const timeout = Math.max(1, Settings.store.tabHibernateAfterMinutes || 15) * 60_000;
+    return (
+        Settings.store.enableTabHibernation &&
+        tab.id !== activeId &&
+        tab.loadStatus === "loaded" &&
+        !isTabBusy(tab) &&
+        Date.now() - tab.lastInteractionAt >= timeout
+    );
+}
+
+function suspendTab(tab: DiscordTab) {
+    if (!canHibernate(tab) || !tab.view) return;
+    if (shellWindow && !shellWindow.isDestroyed()) shellWindow.contentView.removeChildView(tab.view);
+    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+    tab.view = undefined;
+    tab.loadStatus = "suspended";
+    tab.loadGeneration++;
+    tab.retryAttempt = 0;
+    tab.crashRecoveryAttempted = false;
+    broadcastState();
+    mooncordDebug("tabs", "Suspended inactive tab %s", tab.id);
+}
+
+function checkTabHibernation() {
+    for (const tab of tabs) suspendTab(tab);
+}
+
 function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): DiscordTab {
     const view = new WebContentsView({
         webPreferences: {
@@ -210,11 +265,19 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): Disco
         view,
         loadStatus: "idle",
         loadGeneration: 0,
-        retryAttempt: 0
+        retryAttempt: 0,
+        crashRecoveryAttempted: false,
+        lastInteractionAt: Date.now(),
+        activity: {
+            callActive: false,
+            mediaActive: false,
+            uploadActive: false
+        }
     };
     window.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setUserAgent(BrowserUserAgent);
+    attachMooncordDebugConsoleMessages(view.webContents, `tab:${tab.id}`);
     makeWebContentsLinksOpenExternally(view.webContents);
 
     view.webContents.on("dom-ready", () => {
@@ -277,25 +340,76 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): Disco
         tab.loadStatus = "crashed";
         console.error("Discord tab renderer exited:", details);
         broadcastState();
+        if (!tab.crashRecoveryAttempted) {
+            tab.crashRecoveryAttempted = true;
+            tab.retryTimer = setTimeout(() => {
+                tab.retryTimer = undefined;
+                if (tab.view && !tab.view.webContents.isDestroyed()) loadTab(tab, true);
+            }, 1_500);
+        }
     });
     view.webContents.on("unresponsive", () => {
+        tab.loadStatus = "unresponsive";
+        broadcastState();
         console.warn("Discord tab renderer is unresponsive:", tab.id);
     });
     view.webContents.on("responsive", () => {
+        if (tab.loadStatus === "unresponsive") tab.loadStatus = "loaded";
+        touchTab(tab);
+        broadcastState();
         console.info("Discord tab renderer recovered:", tab.id);
     });
+    const untypedEvents = view.webContents as unknown as {
+        on(eventName: string, listener: (...args: any[]) => void): void;
+    };
+    const refreshMediaActivity = () => {
+        if (view.webContents.isDestroyed()) return;
+        void view.webContents
+            .executeJavaScript(
+                `Array.from(document.querySelectorAll("audio,video")).some(element => !element.paused && !element.ended)`
+            )
+            .then(mediaActive => handleDiscordTabActivity(tab.id, { mediaActive: Boolean(mediaActive) }))
+            .catch(() => undefined);
+    };
+    untypedEvents.on("audio-state-changed", (_event, audible) => {
+        handleDiscordTabActivity(tab.id, { callActive: Boolean(audible), mediaActive: Boolean(audible) });
+    });
+    view.webContents.on("media-started-playing", () => handleDiscordTabActivity(tab.id, { mediaActive: true }));
+    view.webContents.on("media-paused", refreshMediaActivity);
+    untypedEvents.on("media-removed", refreshMediaActivity);
     view.webContents.on("destroyed", () => {
         if (tab.retryTimer) clearTimeout(tab.retryTimer);
     });
     return tab;
 }
 
-function setActive(id: string) {
-    const next = tabs.find(tab => tab.id === id);
-    if (!next) return publicState();
+function resumeTab(tab: DiscordTab) {
+    if (tab.view || !shellWindow || shellWindow.isDestroyed()) return tab;
+    const index = tabs.indexOf(tab);
+    if (index < 0) return tab;
+    const resumed = createDiscordTab(shellWindow, {
+        id: tab.id,
+        path: tab.path,
+        title: tab.title,
+        ...(tab.customTitle ? { customTitle: tab.customTitle } : {})
+    });
+    resumed.lastInteractionAt = Date.now();
+    tabs[index] = resumed;
+    mooncordDebug("tabs", "Resumed suspended tab %s", tab.id);
+    return resumed;
+}
 
-    for (const tab of tabs) tab.view.setVisible(tab === next);
+function setActive(id: string) {
+    let next = tabs.find(tab => tab.id === id);
+    if (!next) return publicState();
+    if (next.loadStatus === "suspended") next = resumeTab(next);
+    touchTab(next);
     activeId = next.id;
+
+    for (const tab of tabs) {
+        tab.view?.setVisible(tab === next);
+        applyTabScheduling(tab);
+    }
     loadTab(next);
     updateBounds();
     broadcastState();
@@ -305,9 +419,9 @@ function setActive(id: string) {
 function disposeTab(tab: DiscordTab) {
     if (tab.retryTimer) clearTimeout(tab.retryTimer);
     if (shellWindow && !shellWindow.isDestroyed()) {
-        shellWindow.contentView.removeChildView(tab.view);
+        if (tab.view) shellWindow.contentView.removeChildView(tab.view);
     }
-    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close();
+    if (tab.view && !tab.view.webContents.isDestroyed()) tab.view.webContents.close();
 }
 
 function createTab() {
@@ -348,9 +462,24 @@ function reorderTab(id: string, targetId: string, after: boolean) {
     return publicState();
 }
 
+export function reloadDiscordTab(id: string) {
+    let tab = tabs.find(item => item.id === id);
+    if (!tab) return publicState();
+    const wasSuspended = tab.loadStatus === "suspended";
+    if (wasSuspended) tab = resumeTab(tab);
+    if (!tab.view || tab.view.webContents.isDestroyed()) return publicState();
+    tab.crashRecoveryAttempted = false;
+    tab.retryAttempt = 0;
+    tab.loadStatus = "idle";
+    if (wasSuspended) loadTab(tab);
+    else tab.view.webContents.reload();
+    broadcastState();
+    return publicState();
+}
+
 function reloadActiveTab() {
     const tab = activeTab();
-    if (!tab || tab.view.webContents.isDestroyed()) return;
+    if (!tab || !tab.view || tab.view.webContents.isDestroyed()) return;
 
     if (tab.loadStatus === "crashed" || tab.loadStatus === "idle") {
         if (tab.loadStatus === "crashed") tab.loadStatus = "idle";
@@ -359,7 +488,25 @@ function reloadActiveTab() {
         return;
     }
 
-    tab.view.webContents.reload();
+    reloadDiscordTab(tab.id);
+}
+
+export function openDiscordTabDevTools(id: string) {
+    const tab = tabs.find(item => item.id === id);
+    if (!tab?.view || tab.view.webContents.isDestroyed()) return;
+    tab.view.webContents.openDevTools({ mode: "detach" });
+}
+
+export function handleDiscordTabActivity(id: string, activity: unknown) {
+    const tab = tabs.find(item => item.id === id);
+    if (!tab || typeof activity !== "object" || activity === null) return;
+    const data = activity as Record<string, unknown>;
+    if (data.interaction === true) touchTab(tab);
+    for (const key of ["callActive", "mediaActive", "uploadActive"] as const) {
+        if (typeof data[key] === "boolean") tab.activity[key] = data[key];
+    }
+    applyTabScheduling(tab);
+    broadcastState();
 }
 
 function resetTabs() {
@@ -378,12 +525,12 @@ export function getDiscordTabState() {
 }
 
 export function getActiveDiscordWebContents(): WebContents | undefined {
-    const contents = activeTab()?.view.webContents;
+    const contents = activeTab()?.view?.webContents;
     return contents && !contents.isDestroyed() ? contents : undefined;
 }
 
 export function getDiscordTabForWebContents(contents: WebContents) {
-    return tabs.find(tab => tab.view.webContents.id === contents.id);
+    return tabs.find(tab => tab.view?.webContents.id === contents.id);
 }
 
 export function broadcastToDiscordTabs(channel: IpcEvents, ...args: unknown[]) {
@@ -457,6 +604,8 @@ export function initializeDiscordTabs(window: BrowserWindow, uri?: string) {
 
     window.on("resize", updateBounds);
     window.on("closed", () => {
+        if (hibernationTimer) clearInterval(hibernationTimer);
+        hibernationTimer = undefined;
         for (const tab of tabs) {
             if (tab.retryTimer) clearTimeout(tab.retryTimer);
         }
@@ -465,8 +614,12 @@ export function initializeDiscordTabs(window: BrowserWindow, uri?: string) {
         shellWindow = undefined;
     });
 
+    if (hibernationTimer) clearInterval(hibernationTimer);
+    hibernationTimer = setInterval(checkTabHibernation, 30_000);
+    Settings.addChangeListener("enableTabHibernation", () => checkTabHibernation());
+    Settings.addChangeListener("tabHibernateAfterMinutes", () => checkTabHibernation());
     setActive(activeId);
-    void window.loadURL("vesktop://static/views/mooncord-shell.html").catch(error => {
+    void window.loadURL("mooncord://static/views/mooncord-shell.html").catch(error => {
         console.error("Failed to load Mooncord tab bar:", error);
     });
 }

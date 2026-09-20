@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -31,6 +31,9 @@ import {
     broadcastToDiscordTabs,
     getActiveDiscordWebContents,
     getDiscordTabForWebContents,
+    handleDiscordTabActivity,
+    openDiscordTabDevTools,
+    reloadDiscordTab,
     toggleActiveDiscordDevTools
 } from "./discordTabs";
 import { enableHardwareAcceleration } from "./main";
@@ -63,13 +66,13 @@ handleSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT, () =>
     readRendererScript(join(VENCORD_FILES_DIR, "vencordDesktopRenderer.js"))
 );
 
-const VESKTOP_RENDERER_JS_PATH = join(__dirname, "renderer.js");
-const VESKTOP_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
-handleSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT, () => readRendererScript(VESKTOP_RENDERER_JS_PATH));
-handle(IpcEvents.GET_VESKTOP_RENDERER_CSS, () => {
-    if (IS_DEV) return readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8");
+const MOONCORD_RENDERER_JS_PATH = join(__dirname, "renderer.js");
+const MOONCORD_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
+handleSync(IpcEvents.GET_MOONCORD_RENDERER_SCRIPT, () => readRendererScript(MOONCORD_RENDERER_JS_PATH));
+handle(IpcEvents.GET_MOONCORD_RENDERER_CSS, () => {
+    if (IS_DEV) return readFile(MOONCORD_RENDERER_CSS_PATH, "utf-8");
     if (!rendererCssCache) {
-        rendererCssCache = readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8").catch(error => {
+        rendererCssCache = readFile(MOONCORD_RENDERER_CSS_PATH, "utf-8").catch(error => {
             rendererCssCache = undefined;
             throw error;
         });
@@ -78,10 +81,10 @@ handle(IpcEvents.GET_VESKTOP_RENDERER_CSS, () => {
 });
 
 if (IS_DEV) {
-    watch(VESKTOP_RENDERER_CSS_PATH, { persistent: false }, async () => {
+    watch(MOONCORD_RENDERER_CSS_PATH, { persistent: false }, async () => {
         broadcastToDiscordTabs(
-            IpcEvents.VESKTOP_RENDERER_CSS_UPDATE,
-            await readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8")
+            IpcEvents.MOONCORD_RENDERER_CSS_UPDATE,
+            await readFile(MOONCORD_RENDERER_CSS_PATH, "utf-8")
         );
     });
 }
@@ -232,9 +235,17 @@ function openDebugPage(page: string) {
 handle(IpcEvents.DEBUG_LAUNCH_GPU, () => openDebugPage("chrome://gpu"));
 handle(IpcEvents.DEBUG_LAUNCH_WEBRTC_INTERNALS, () => openDebugPage("chrome://webrtc-internals"));
 
+handle(IpcEvents.RELOAD_MOONCORD_TAB, (_event, id: string) => reloadDiscordTab(id));
+handle(IpcEvents.OPEN_MOONCORD_TAB_DEVTOOLS, (_event, id: string) => openDiscordTabDevTools(id));
+handle(IpcEvents.WAIT_FOR_MOONCORD_TAB, (_event, id: string) => handleDiscordTabActivity(id, { interaction: true }));
+handle(IpcEvents.MOONCORD_TAB_ACTIVITY, (event, activity: unknown) => {
+    const tab = getDiscordTabForWebContents(event.sender);
+    if (tab) handleDiscordTabActivity(tab.id, activity);
+});
+
 handle(IpcEvents.TOGGLE_DEVTOOLS, e => {
     const tab = getDiscordTabForWebContents(e.sender);
-    if (tab) tab.view.webContents.toggleDevTools();
+    if (tab?.view) tab.view.webContents.toggleDevTools();
     else if (e.sender === mainWin?.webContents) toggleActiveDiscordDevTools();
     else getActiveDiscordWebContents()?.toggleDevTools();
 });

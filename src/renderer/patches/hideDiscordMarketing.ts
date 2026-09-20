@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -18,34 +18,45 @@ const MARKETING_SELECTORS = [
     'a[href^="https://discord.com/download?"]'
 ].join(",");
 
-let removalScheduled = false;
+const STYLE_ID = "mooncord-hide-discord-marketing";
 
-function removeDiscordDownloadPrompts() {
-    removalScheduled = false;
-
-    for (const element of document.querySelectorAll<HTMLElement>(MARKETING_SELECTORS)) {
-        const banner = element.closest<HTMLElement>('[role="banner"]');
-        (banner || element).remove();
-    }
+function installMarketingCss() {
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `${MARKETING_SELECTORS} { display: none !important; }`;
+    (document.head || document.documentElement).appendChild(style);
 }
 
-function scheduleRemoval() {
-    if (removalScheduled) return;
-    removalScheduled = true;
-    requestAnimationFrame(removeDiscordDownloadPrompts);
+function inspectNode(node: Node) {
+    if (!(node instanceof Element)) return;
+    if (node.matches(MARKETING_SELECTORS)) node.remove();
+    for (const element of node.querySelectorAll(MARKETING_SELECTORS)) element.remove();
 }
 
 if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", scheduleRemoval, { once: true });
+    document.addEventListener(
+        "DOMContentLoaded",
+        () => {
+            installMarketingCss();
+            inspectNode(document.body);
+        },
+        { once: true }
+    );
 } else {
-    scheduleRemoval();
+    installMarketingCss();
+    inspectNode(document.body);
 }
 
 function observeDiscordDom() {
     const root = document.documentElement;
     if (!root) return;
 
-    new MutationObserver(scheduleRemoval).observe(root, {
+    new MutationObserver(records => {
+        for (const record of records) {
+            for (const node of record.addedNodes) inspectNode(node);
+        }
+    }).observe(root, {
         childList: true,
         subtree: true
     });

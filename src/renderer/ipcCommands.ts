@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2025 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -14,10 +14,10 @@ type IpcCommandHandler = (data: any) => any;
 const handlers = new Map<string, IpcCommandHandler>();
 
 function respond(nonce: string, ok: boolean, data: any) {
-    VesktopNative.commands.respond({ nonce, ok, data });
+    MooncordNative.commands.respond({ nonce, ok, data });
 }
 
-VesktopNative.commands.onCommand(async ({ message, nonce, data }) => {
+MooncordNative.commands.onCommand(async ({ message, nonce, data }) => {
     const handler = handlers.get(message);
     if (!handler) {
         return respond(nonce, false, `No handler for message: ${message}`);

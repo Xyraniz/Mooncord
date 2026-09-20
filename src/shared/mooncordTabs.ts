@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2026 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -23,7 +23,7 @@ export interface MooncordTabRecord {
     customTitle?: string;
 }
 
-export type MooncordTabLoadStatus = "idle" | "loading" | "loaded" | "crashed";
+export type MooncordTabLoadStatus = "idle" | "loading" | "loaded" | "crashed" | "unresponsive" | "suspended";
 
 export interface MooncordTabInfo extends MooncordTabRecord {
     loadStatus: MooncordTabLoadStatus;
@@ -35,7 +35,7 @@ export interface MooncordTabsState {
 }
 
 export function canLoadMooncordTab(status: MooncordTabLoadStatus) {
-    return status === "idle" || status === "crashed";
+    return status === "idle" || status === "crashed" || status === "unresponsive" || status === "suspended";
 }
 
 export interface RestoreMooncordTabsOptions {

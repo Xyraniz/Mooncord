@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -115,7 +115,7 @@ async function copyVenmic() {
     ]).catch(() => console.warn("Failed to copy venmic. Building without venmic support"));
 }
 
-async function copyLibVesktop() {
+async function copyLibMooncord() {
     if (process.platform !== "linux") return;
 
     try {
@@ -126,7 +126,7 @@ async function copyLibVesktop() {
         console.log("Using local libvesktop build");
     } catch {
         console.log(
-            "Using prebuilt libvesktop binaries. Run `pnpm buildLibVesktop` and build again to build from source - see README.md for more details"
+            "Using prebuilt libvesktop binaries. Run `pnpm buildLibMooncord` and build again to build from source - see README.md for more details"
         );
         return Promise.all([
             copyFile("./packages/libvesktop/prebuilds/vesktop-x64.node", "./static/dist/libvesktop-x64.node"),
@@ -137,24 +137,24 @@ async function copyLibVesktop() {
 
 await Promise.all([
     copyVenmic(),
-    copyLibVesktop(),
+    copyLibMooncord(),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/index.ts"],
         outfile: "dist/js/main.js",
-        footer: { js: "//# sourceURL=VesktopMain" }
+        footer: { js: "//# sourceURL=MooncordMain" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/main/arrpc/worker.ts"],
         outfile: "dist/js/arRpcWorker.js",
-        footer: { js: "//# sourceURL=VesktopArRpcWorker" }
+        footer: { js: "//# sourceURL=MooncordArRpcWorker" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/index.ts"],
         outfile: "dist/js/preload.js",
-        footer: { js: "//# sourceURL=VesktopPreload" }
+        footer: { js: "//# sourceURL=MooncordPreload" }
     }),
     createContext({
         ...NodeCommonOpts,
@@ -166,17 +166,17 @@ await Promise.all([
         ...NodeCommonOpts,
         entryPoints: ["src/preload/splash.ts"],
         outfile: "dist/js/splashPreload.js",
-        footer: { js: "//# sourceURL=VesktopSplashPreload" }
+        footer: { js: "//# sourceURL=MooncordSplashPreload" }
     }),
     createContext({
         ...NodeCommonOpts,
         entryPoints: ["src/preload/updater.ts"],
         outfile: "dist/js/updaterPreload.js",
-        footer: { js: "//# sourceURL=VesktopUpdaterPreload" }
+        footer: { js: "//# sourceURL=MooncordUpdaterPreload" }
     }),
     createContext({
         ...CommonOpts,
-        globalName: "Vesktop",
+        globalName: "Mooncord",
         entryPoints: ["src/renderer/index.ts"],
         outfile: "dist/js/renderer.js",
         format: "iife",
@@ -185,7 +185,7 @@ await Promise.all([
         jsxFragment: "VencordFragment",
         external: ["@vencord/types/*"],
         plugins: [vencordDep, includeDirPlugin("patches", "src/renderer/patches")],
-        footer: { js: "//# sourceURL=VesktopRenderer" }
+        footer: { js: "//# sourceURL=MooncordRenderer" }
     })
 ]);
 

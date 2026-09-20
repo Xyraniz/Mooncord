@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -18,7 +18,7 @@ export function validateSender(frame: WebFrameMain | null, event: string) {
         throw new Error(`ipc[${event}]: Invalid URL ${frame.url}`);
     }
 
-    if (protocol === "file:" || protocol === "vesktop:") return;
+    if (protocol === "file:" || protocol === "mooncord:") return;
 
     if (!DISCORD_HOSTNAMES.includes(hostname)) {
         throw new Error(`ipc[${event}]: Disallowed hostname ${hostname}`);

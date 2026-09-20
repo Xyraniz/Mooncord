@@ -1,15 +1,19 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { contextBridge, ipcRenderer, webFrame } from "electron/renderer";
 
 import { IpcEvents } from "../shared/IpcEvents";
-import { VesktopNative } from "./VesktopNative";
+import { MooncordNative } from "./MooncordNative";
 
-contextBridge.exposeInMainWorld("VesktopNative", VesktopNative);
+contextBridge.exposeInMainWorld("MooncordNative", MooncordNative);
+// Vencord's bundled desktop plugins still reference this historical global.
+// Keep it as a compatibility alias while all Mooncord-owned code uses the new
+// name, so the branding rename does not break the vendor integration.
+contextBridge.exposeInMainWorld("VesktopNative", MooncordNative);
 
 const MOONCORD_PAGE_PASSKEY_GUARD = `(() => {
     const credentials = navigator.credentials;
@@ -112,4 +116,4 @@ Function(
 )(require, Buffer, process, clearImmediate, setImmediate);
 
 webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT));
-webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT));
+webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_MOONCORD_RENDERER_SCRIPT));

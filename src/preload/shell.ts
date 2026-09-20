@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -28,6 +28,9 @@ const mooncordShellNative: MooncordShellNativeApi = {
     goBack: () => ipcRenderer.invoke(IpcEvents.DISCORD_BACK),
     goForward: () => ipcRenderer.invoke(IpcEvents.DISCORD_FORWARD),
     reload: () => ipcRenderer.invoke(IpcEvents.DISCORD_RELOAD),
+    reloadTab: (id: string) => ipcRenderer.invoke(IpcEvents.RELOAD_MOONCORD_TAB, id),
+    openTabDevTools: (id: string) => ipcRenderer.invoke(IpcEvents.OPEN_MOONCORD_TAB_DEVTOOLS, id),
+    waitForTab: (id: string) => ipcRenderer.invoke(IpcEvents.WAIT_FOR_MOONCORD_TAB, id),
     minimize: () => ipcRenderer.invoke(IpcEvents.MINIMIZE),
     maximize: () => ipcRenderer.invoke(IpcEvents.MAXIMIZE),
     closeWindow: () => ipcRenderer.invoke(IpcEvents.CLOSE),

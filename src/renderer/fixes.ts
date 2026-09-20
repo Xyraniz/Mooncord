@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -42,7 +42,7 @@ Object.defineProperty(Notification.prototype, "onclick", {
     set(onClick) {
         originalSetOnClick.call(this, function (this: unknown) {
             onClick.apply(this, arguments);
-            VesktopNative.win.focus();
+            MooncordNative.win.focus();
         });
     },
     configurable: true

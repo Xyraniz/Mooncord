@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -25,11 +25,12 @@ import { createAboutWindow } from "./about";
 import { initArRPC } from "./arrpc";
 import { CommandLine } from "./cli";
 import { DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+import { attachMooncordDebugConsoleMessages } from "./debug";
 import { initializeDiscordTabs, toggleActiveDiscordDevTools } from "./discordTabs";
 import { AppEvents } from "./events";
 import { sendRendererCommand } from "./ipcCommands";
 import { darwinURL } from "./main";
-import { Settings, State, VencordSettings } from "./settings";
+import { flushSettings, Settings, State, VencordSettings } from "./settings";
 import { createSplashWindow } from "./splash";
 import { destroyTray, initTray } from "./tray";
 import { clearData } from "./utils/clearData";
@@ -39,11 +40,19 @@ import { ensureVencordFiles, restoreBundledVencordFiles } from "./utils/vencordL
 import { VENCORD_FILES_DIR } from "./vencordFilesDir";
 
 let isQuitting = false;
+let didFlushSettings = false;
 
 applyDeckKeyboardFix();
 
 app.on("before-quit", () => {
     isQuitting = true;
+});
+
+app.on("before-quit", event => {
+    if (didFlushSettings) return;
+    didFlushSettings = true;
+    event.preventDefault();
+    void flushSettings().finally(() => app.quit());
 });
 
 export let mainWin: BrowserWindow;
@@ -88,14 +97,14 @@ function initMenuBar(win: BrowserWindow) {
                 app.relaunch();
                 app.quit();
             },
-            toolTip: "Vesktop will automatically restart after this operation"
+            toolTip: "Mooncord will automatically restart after this operation"
         },
         {
             label: "Restablecer Mooncord",
             async click() {
                 await clearData(win);
             },
-            toolTip: "Vesktop will automatically restart after this operation"
+            toolTip: "Mooncord will automatically restart after this operation"
         },
         {
             label: "Relaunch",
@@ -183,7 +192,7 @@ function initMenuBar(win: BrowserWindow) {
 
     const menuItems = [
         {
-            label: "Vesktop",
+            label: "Mooncord",
             role: "appMenu",
             submenu: subMenu.filter(isTruthy)
         },
@@ -209,14 +218,30 @@ function initWindowBoundsListeners(win: BrowserWindow) {
     win.on("unmaximize", saveState);
     win.on("restore", saveState);
 
+    let boundsTimer: ReturnType<typeof setTimeout> | undefined;
+    let pendingBounds: Rectangle | undefined;
+    const persistBounds = () => {
+        if (!pendingBounds) return;
+        State.store.windowBounds = pendingBounds;
+        pendingBounds = undefined;
+    };
     const saveBounds = () => {
         if (win.isMaximized()) return;
-
-        State.store.windowBounds = win.getBounds();
+        pendingBounds = win.getBounds();
+        if (boundsTimer) clearTimeout(boundsTimer);
+        boundsTimer = setTimeout(() => {
+            boundsTimer = undefined;
+            if (!win.isDestroyed() && !win.isMaximized()) persistBounds();
+        }, 200);
     };
 
     win.on("resize", saveBounds);
     win.on("move", saveBounds);
+    win.on("closed", () => {
+        if (boundsTimer) clearTimeout(boundsTimer);
+        boundsTimer = undefined;
+        persistBounds();
+    });
 }
 
 function initSettingsListeners(win: BrowserWindow) {
@@ -282,7 +307,7 @@ function initStaticTitle(win: BrowserWindow) {
 
     addSettingsListener("staticTitle", enabled => {
         if (enabled) {
-            win.setTitle("Vesktop");
+            win.setTitle("Mooncord");
             win.on("page-title-updated", listener);
         } else {
             win.off("page-title-updated", listener);
@@ -375,7 +400,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
     }
 
     if (staticTitle) {
-        options.title = "Vesktop";
+        options.title = "Mooncord";
     }
 
     if (process.platform === "darwin") {
@@ -397,6 +422,7 @@ function createMainWindow() {
     removeVencordSettingsListeners();
 
     const win = (mainWin = new BrowserWindow(buildBrowserWindowOptions()));
+    attachMooncordDebugConsoleMessages(win.webContents, "shell");
 
     // The shell renderer does not need to render continuously while the window is hidden.
     const syncBackgroundThrottling = () => {

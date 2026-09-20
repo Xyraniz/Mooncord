@@ -1,5 +1,5 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2023 Vendicated and Vencord contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
@@ -43,7 +43,7 @@ function generateDescription(description: string, descriptionNode: Element) {
     }
 }
 
-const releases = await fetch("https://api.github.com/repos/Vencord/Vesktop/releases", {
+const releases = await fetch("https://api.github.com/repos/Xyraniz/Mooncord/releases", {
     headers: {
         Accept: "application/vnd.github+json",
         "X-Github-Api-Version": "2022-11-28",
@@ -55,7 +55,7 @@ const latestReleaseInformation = releases[0];
 
 const metaInfo = await (async () => {
     for (const release of releases) {
-        const metaAsset = release.assets.find((a: any) => a.name === "dev.vencord.Vesktop.metainfo.xml");
+        const metaAsset = release.assets.find((a: any) => a.name === "dev.mooncord.Mooncord.metainfo.xml");
         if (metaAsset) return fetch(metaAsset.browser_download_url).then(res => res.text());
     }
 })();
@@ -103,6 +103,6 @@ const output = xmlFormat(new XMLSerializer().serializeToString(parser), {
 });
 
 await mkdir("./dist", { recursive: true });
-await fs.writeFile("./dist/dev.vencord.Vesktop.metainfo.xml", output, "utf-8");
+await fs.writeFile("./dist/dev.mooncord.Mooncord.metainfo.xml", output, "utf-8");
 
-console.log("Updated meta information written to ./dist/dev.vencord.Vesktop.metainfo.xml");
+console.log("Updated meta information written to ./dist/dev.mooncord.Mooncord.metainfo.xml");

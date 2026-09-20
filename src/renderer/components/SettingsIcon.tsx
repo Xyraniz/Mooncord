@@ -1,12 +1,12 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
  * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { IconProps } from "@vencord/types/utils/types";
 
-export function VesktopSettingsIcon(props: IconProps) {
+export function MooncordSettingsIcon(props: IconProps) {
     return (
         <svg {...props} viewBox="0 0 24 24">
             <path

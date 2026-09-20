@@ -1,13 +1,13 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { filters, waitFor } from "@vencord/types/webpack";
 import { RelationshipStore } from "@vencord/types/webpack/common";
 
-import { VesktopLogger } from "./logger";
+import { MooncordLogger } from "./logger";
 import { Settings } from "./settings";
 
 let GuildReadStateStore: any;
@@ -25,9 +25,9 @@ export function setBadge() {
         let totalCount = mentionCount + pendingRequests;
         if (!totalCount && hasUnread && !disableUnreadBadge) totalCount = -1;
 
-        VesktopNative.app.setBadgeCount(totalCount);
+        MooncordNative.app.setBadgeCount(totalCount);
     } catch (e) {
-        VesktopLogger.error("Failed to update badge count", e);
+        MooncordLogger.error("Failed to update badge count", e);
     }
 }
 

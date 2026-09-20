@@ -1,32 +1,32 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
 import { useState } from "@vencord/types/webpack/common";
 
+import { MooncordSettingsSwitch } from "./MooncordSettingsSwitch";
 import { SettingsComponent } from "./Settings";
-import { VesktopSettingsSwitch } from "./VesktopSettingsSwitch";
 
 export const AutoStartToggle: SettingsComponent = ({ settings }) => {
-    const [autoStartEnabled, setAutoStartEnabled] = useState(VesktopNative.autostart.isEnabled());
+    const [autoStartEnabled, setAutoStartEnabled] = useState(MooncordNative.autostart.isEnabled());
 
     return (
         <>
-            <VesktopSettingsSwitch
+            <MooncordSettingsSwitch
                 title="Start With System"
-                description="Automatically start Vesktop on computer start-up"
+                description="Automatically start Mooncord on computer start-up"
                 value={autoStartEnabled}
                 onChange={async v => {
-                    await VesktopNative.autostart[v ? "enable" : "disable"]();
+                    await MooncordNative.autostart[v ? "enable" : "disable"]();
                     setAutoStartEnabled(v);
                 }}
             />
 
-            <VesktopSettingsSwitch
+            <MooncordSettingsSwitch
                 title="Auto Start Minimized"
-                description={"Start Vesktop minimized when starting with system"}
+                description={"Start Mooncord minimized when starting with system"}
                 value={settings.autoStartMinimized}
                 onChange={v => (settings.autoStartMinimized = v)}
                 disabled={!autoStartEnabled}

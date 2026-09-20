@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -33,6 +33,8 @@ export interface Settings {
     disableMinSize: boolean;
     clickTrayToShowHide: boolean;
     nativeTitleBar: boolean;
+    enableTabHibernation: boolean;
+    tabHibernateAfterMinutes: number;
 
     enableSplashScreen: boolean;
     splashTheming: boolean;

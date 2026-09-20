@@ -1,6 +1,6 @@
 /*
- * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Mooncord, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -34,12 +34,12 @@ addPatch({
         }
 
         const cb = (w: string, c: string[]) => {
-            VesktopNative.spellcheck.offSpellcheckResult(cb);
+            MooncordNative.spellcheck.offSpellcheckResult(cb);
             word = w;
             corrections = c;
             openMenu();
         };
-        VesktopNative.spellcheck.onSpellcheckResult(cb);
+        MooncordNative.spellcheck.onSpellcheckResult(cb);
     }
 });
 
@@ -47,7 +47,7 @@ addContextMenuPatch("textarea-context", children => {
     const spellCheckEnabled = useStateFromStores([SpellCheckStore], () => SpellCheckStore.isEnabled());
     const hasCorrections = Boolean(word && corrections?.length);
 
-    const availableLanguages = useMemo(VesktopNative.spellcheck.getAvailableLanguages, []);
+    const availableLanguages = useMemo(MooncordNative.spellcheck.getAvailableLanguages, []);
 
     const settings = useSettings();
     const spellCheckLanguages = (settings.spellCheckLanguages ??= [...new Set(navigator.languages)]);
@@ -65,14 +65,14 @@ addContextMenuPatch("textarea-context", children => {
                             key={c}
                             id={"vcd-spellcheck-suggestion-" + c}
                             label={c}
-                            action={() => VesktopNative.spellcheck.replaceMisspelling(c)}
+                            action={() => MooncordNative.spellcheck.replaceMisspelling(c)}
                         />
                     ))}
                     <Menu.MenuSeparator />
                     <Menu.MenuItem
                         id="vcd-spellcheck-learn"
                         label={`Add ${word} to dictionary`}
-                        action={() => VesktopNative.spellcheck.addToDictionary(word)}
+                        action={() => MooncordNative.spellcheck.addToDictionary(word)}
                     />
                 </>
             )}

@@ -2,7 +2,7 @@
     "name": "mooncord-client",
     "version": "1.6.7",
     "private": true,
-    "description": "Mooncord Client - a customizable Discord desktop client",
+    "description": "Mooncord - a customizable Discord desktop client",
     "keywords": [],
     "homepage": "https://github.com/Xyraniz/Mooncord",
     "license": "GPL-3.0-or-later",
@@ -12,7 +12,7 @@
         "build": "tsx scripts/build/build.mts",
         "build:dev": "pnpm build --dev",
         "build:vencord": "tsx scripts/build/build.mts --vencord-only",
-        "buildLibVesktop": "pnpm -C packages/libvesktop install && pnpm -C packages/libvesktop run build",
+        "buildLibMooncord": "pnpm -C packages/libvesktop install && pnpm -C packages/libvesktop run build",
         "package": "pnpm build && electron-builder",
         "package:dir": "pnpm build && electron-builder --dir",
         "lint": "eslint",
@@ -67,8 +67,8 @@
     },
     "build": {
         "appId": "dev.mooncord.client",
-        "productName": "Mooncord Client",
-        "executableName": "mooncord-client",
+        "productName": "Mooncord",
+        "executableName": "mooncord",
         "files": [
             "!*",
             "!node_modules",
@@ -91,7 +91,7 @@
         "linux": {
             "icon": "build/icon.svg",
             "category": "Network",
-            "maintainer": "vendicated+vesktop@riseup.net",
+            "maintainer": "vendicated+mooncord@riseup.net",
             "target": [
                 {
                     "target": "deb",
@@ -124,13 +124,13 @@
             ],
             "desktop": {
                 "entry": {
-                    "Name": "Vesktop",
+                    "Name": "Mooncord",
                     "GenericName": "Internet Messenger",
                     "Type": "Application",
                     "Categories": "Network;InstantMessaging;Chat;",
                     "Keywords": "discord;vencord;electron;chat;",
                     "MimeType": "x-scheme-handler/discord",
-                    "StartupWMClass": "vesktop"
+                    "StartupWMClass": "mooncord"
                 }
             }
         },
