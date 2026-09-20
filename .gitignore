@@ -1,0 +1,8 @@
+dist
+dist-portable
+Data
+node_modules
+.env
+.DS_Store
+.idea/
+.pnpm-store/

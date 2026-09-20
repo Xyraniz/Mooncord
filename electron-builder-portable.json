@@ -1,0 +1,34 @@
+{
+    "appId": "dev.mooncord.client",
+    "productName": "Mooncord Client",
+    "executableName": "mooncord-client",
+    "directories": {
+        "output": "dist-portable"
+    },
+    "files": [
+        "!*/node_modules",
+        "dist/js",
+        "static",
+        "package.json",
+        "LICENSE"
+    ],
+    "beforePack": "scripts/build/beforePack.mjs",
+    "afterPack": "scripts/build/afterPack.mjs",
+    "win": {
+        "target": [
+            {
+                "target": "portable",
+                "arch": ["x64"]
+            }
+        ]
+    },
+    "electronFuses": {
+        "runAsNode": false,
+        "enableCookieEncryption": false,
+        "enableNodeOptionsEnvironmentVariable": false,
+        "enableNodeCliInspectArguments": false,
+        "enableEmbeddedAsarIntegrityValidation": false,
+        "loadBrowserProcessSpecificV8Snapshot": false,
+        "grantFileProtocolExtraPrivileges": false
+    }
+}
