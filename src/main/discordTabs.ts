@@ -12,6 +12,7 @@ import {
     canLoadMooncordTab,
     getFallbackActiveMooncordTabId,
     getMooncordTabBounds,
+    getMooncordTabRetryDelay,
     MAX_MOONCORD_TABS,
     type MooncordTabInfo,
     type MooncordTabRecord,
@@ -42,6 +43,7 @@ interface DiscordTab extends MooncordTabRecord {
     view: WebContentsView;
     loadStatus: MooncordTabInfo["loadStatus"];
     loadGeneration: number;
+    retryAttempt: number;
     retryTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -49,6 +51,8 @@ let shellWindow: BrowserWindow | undefined;
 let tabs: DiscordTab[] = [];
 let activeId = "";
 let didEmitAppLoaded = false;
+let persistedTabsSignature = JSON.stringify(State.store.mooncordTabs ?? []);
+let persistedActiveId = State.store.activeMooncordTabId;
 
 function discordOrigin() {
     const branch = Settings.store.discordBranch;
@@ -86,13 +90,21 @@ function publicState(): MooncordTabsState {
 }
 
 function persistState() {
-    State.store.mooncordTabs = tabs.map(({ id, path, title, customTitle }) => ({
+    const storedTabs = tabs.map(({ id, path, title, customTitle }) => ({
         id,
         path,
         title,
         ...(customTitle ? { customTitle } : {})
     }));
-    State.store.activeMooncordTabId = activeId;
+    const nextTabsSignature = JSON.stringify(storedTabs);
+    if (nextTabsSignature !== persistedTabsSignature) {
+        State.store.mooncordTabs = storedTabs;
+        persistedTabsSignature = nextTabsSignature;
+    }
+    if (activeId !== persistedActiveId) {
+        State.store.activeMooncordTabId = activeId;
+        persistedActiveId = activeId;
+    }
 }
 
 function broadcastState() {
@@ -106,7 +118,7 @@ function updateBounds() {
     if (!shellWindow || shellWindow.isDestroyed()) return;
     const [width, height] = shellWindow.getContentSize();
     const bounds = getMooncordTabBounds(width, height);
-    for (const tab of tabs) tab.view.setBounds(bounds);
+    activeTab()?.view.setBounds(bounds);
 }
 
 function activeTab() {
@@ -124,8 +136,9 @@ function emitAppLoaded() {
     AppEvents.emit("appLoaded");
 }
 
-function loadTab(tab: DiscordTab) {
+function loadTab(tab: DiscordTab, automaticRetry = false) {
     if (!canLoadMooncordTab(tab.loadStatus) || tab.view.webContents.isDestroyed()) return;
+    if (!automaticRetry) tab.retryAttempt = 0;
     if (tab.retryTimer) clearTimeout(tab.retryTimer);
     tab.retryTimer = undefined;
     const loadGeneration = ++tab.loadGeneration;
@@ -138,6 +151,7 @@ function loadTab(tab: DiscordTab) {
         .then(() => {
             if (tab.loadGeneration !== loadGeneration || tab.loadStatus === "crashed") return;
             tab.loadStatus = "loaded";
+            tab.retryAttempt = 0;
             emitAppLoaded();
             broadcastState();
         })
@@ -149,11 +163,17 @@ function loadTab(tab: DiscordTab) {
             const description = error?.code || error?.message || "Error de conexión";
             console.error(`Failed to load Discord tab ${tab.id}:`, error);
             updateSplashMessage(`No se pudo cargar Discord: ${description}`);
+            tab.retryAttempt++;
+            const retryDelay = getMooncordTabRetryDelay(tab.retryAttempt);
+            if (retryDelay === null) {
+                console.warn("Stopped automatic Discord tab retries after " + tab.retryAttempt + " attempts:", tab.id);
+                return;
+            }
             if (tab.retryTimer) clearTimeout(tab.retryTimer);
             tab.retryTimer = setTimeout(() => {
                 tab.retryTimer = undefined;
-                loadTab(tab);
-            }, 1000);
+                loadTab(tab, true);
+            }, retryDelay);
         });
 }
 
@@ -184,7 +204,14 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): Disco
             backgroundThrottling: true
         }
     });
-    const tab: DiscordTab = { ...info, path: safePath(info.path), view, loadStatus: "idle", loadGeneration: 0 };
+    const tab: DiscordTab = {
+        ...info,
+        path: safePath(info.path),
+        view,
+        loadStatus: "idle",
+        loadGeneration: 0,
+        retryAttempt: 0
+    };
     window.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setUserAgent(BrowserUserAgent);
@@ -215,7 +242,9 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): Disco
     view.webContents.on("did-navigate-in-page", (_event, url) => updateTabFromNavigation(tab, url));
     view.webContents.on("page-title-updated", (event, title) => {
         event.preventDefault();
-        tab.title = cleanTitle(title, tab);
+        const nextTitle = cleanTitle(title, tab);
+        if (tab.title === nextTitle) return;
+        tab.title = nextTitle;
         broadcastState();
     });
     view.webContents.on("before-input-event", (event, input) => {
@@ -242,11 +271,18 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): Disco
     view.webContents.on("devtools-closed", () => sendToTab(tab, IpcEvents.DEVTOOLS_CLOSED));
     view.webContents.on("render-process-gone", (_event, details) => {
         tab.loadGeneration++;
+        tab.retryAttempt = 0;
         if (tab.retryTimer) clearTimeout(tab.retryTimer);
         tab.retryTimer = undefined;
         tab.loadStatus = "crashed";
         console.error("Discord tab renderer exited:", details);
         broadcastState();
+    });
+    view.webContents.on("unresponsive", () => {
+        console.warn("Discord tab renderer is unresponsive:", tab.id);
+    });
+    view.webContents.on("responsive", () => {
+        console.info("Discord tab renderer recovered:", tab.id);
     });
     view.webContents.on("destroyed", () => {
         if (tab.retryTimer) clearTimeout(tab.retryTimer);

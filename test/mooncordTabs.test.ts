@@ -5,6 +5,7 @@ import {
     canLoadMooncordTab,
     getFallbackActiveMooncordTabId,
     getMooncordTabBounds,
+    getMooncordTabRetryDelay,
     MAX_MOONCORD_TABS,
     moveMooncordTab,
     MOONCORD_TAB_TITLE_MAX_LENGTH,
@@ -121,6 +122,16 @@ test("a crashed tab is eligible for an explicit reload without reloading ready t
     assert.equal(canLoadMooncordTab("idle"), true);
     assert.equal(canLoadMooncordTab("loading"), false);
     assert.equal(canLoadMooncordTab("loaded"), false);
+});
+
+test("automatic load retries back off and stop after the configured limit", () => {
+    assert.deepEqual(
+        [1, 2, 3, 4, 5].map(getMooncordTabRetryDelay),
+        [1000, 2000, 4000, 8000, 16000]
+    );
+    assert.equal(getMooncordTabRetryDelay(0), null);
+    assert.equal(getMooncordTabRetryDelay(6), null);
+    assert.equal(getMooncordTabRetryDelay(1.5), null);
 });
 
 test("reordering moves the same tab records and leaves unrelated order intact", () => {

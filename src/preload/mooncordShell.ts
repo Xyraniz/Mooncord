@@ -104,6 +104,11 @@ function createButton(className: string, text: string, ariaLabel: string, action
 export function installMooncordShell(native: MooncordShellNativeApi) {
     const install = async () => {
         if (!document.body || document.getElementById(SHELL_ID)) return;
+        const runNative = (action: string, request: () => Promise<unknown>) => {
+            void Promise.resolve()
+                .then(request)
+                .catch(error => console.error("No se pudo " + action + ":", error));
+        };
         const style = document.createElement("style");
         style.textContent = shellCss;
         document.head.appendChild(style);
@@ -212,11 +217,13 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
                 const close = createButton("mooncord-tab-close", "×", `Cerrar ${displayTitle}`, "close-tab");
                 close.addEventListener("click", event => {
                     event.stopPropagation();
-                    void native.closeTab(tab.id);
+                    runNative("cerrar la pestaña", () => native.closeTab(tab.id));
                 });
                 close.draggable = false;
                 tabElement.append(icon, label, close);
-                tabElement.addEventListener("click", () => void native.selectTab(tab.id));
+                tabElement.addEventListener("click", () =>
+                    runNative("seleccionar la pestaña", () => native.selectTab(tab.id))
+                );
                 tabElement.addEventListener("dragstart", event => {
                     if ((event.target as HTMLElement).closest("button, input")) {
                         event.preventDefault();
@@ -284,25 +291,25 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
         shell.addEventListener("click", event => {
             const action = (event.target as HTMLElement).closest<HTMLElement>("[data-action]")?.dataset.action;
             if (!action) return;
-            if (action === "back") void native.goBack();
-            if (action === "forward") void native.goForward();
-            if (action === "reload") void native.reload();
+            if (action === "back") runNative("volver", () => native.goBack());
+            if (action === "forward") runNative("avanzar", () => native.goForward());
+            if (action === "reload") runNative("recargar la pestaña", () => native.reload());
             if (action === "tools") menu.classList.toggle("open");
             if (action === "devtools") {
                 menu.classList.remove("open");
-                void native.toggleDevTools();
+                runNative("abrir DevTools", () => native.toggleDevTools());
             }
             if (action === "reset-tabs") {
                 menu.classList.remove("open");
-                void native.resetTabs();
+                runNative("restablecer las pestañas", () => native.resetTabs());
             }
             if (action === "discord-settings") {
                 menu.classList.remove("open");
-                void native.openDiscordSettings();
+                runNative("abrir los ajustes de Discord", () => native.openDiscordSettings());
             }
-            if (action === "minimize") void native.minimize();
-            if (action === "maximize") void native.maximize();
-            if (action === "close") void native.closeWindow();
+            if (action === "minimize") runNative("minimizar la ventana", () => native.minimize());
+            if (action === "maximize") runNative("maximizar la ventana", () => native.maximize());
+            if (action === "close") runNative("cerrar la ventana", () => native.closeWindow());
         });
         document.addEventListener("click", event => {
             if (!tools.contains(event.target as Node)) menu.classList.remove("open");
@@ -321,7 +328,7 @@ export function installMooncordShell(native: MooncordShellNativeApi) {
                 event.preventDefault();
                 const index = currentState.tabs.findIndex(tab => tab.id === currentState.activeId);
                 const next = currentState.tabs[(index + 1) % currentState.tabs.length];
-                if (next) void native.selectTab(next.id);
+                if (next) runNative("cambiar de pestaña", () => native.selectTab(next.id));
             }
         });
 

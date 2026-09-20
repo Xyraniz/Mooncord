@@ -5,8 +5,16 @@
  */
 
 export const MAX_MOONCORD_TABS = 8;
+export const MAX_AUTOMATIC_MOONCORD_TAB_RETRIES = 5;
 export const MOONCORD_TOOLBAR_HEIGHT = 54;
 export const MOONCORD_TAB_TITLE_MAX_LENGTH = 48;
+
+export function getMooncordTabRetryDelay(retryAttempt: number): number | null {
+    if (!Number.isInteger(retryAttempt) || retryAttempt < 1 || retryAttempt > MAX_AUTOMATIC_MOONCORD_TAB_RETRIES)
+        return null;
+
+    return Math.min(1000 * 2 ** (retryAttempt - 1), 16_000);
+}
 
 export interface MooncordTabRecord {
     id: string;

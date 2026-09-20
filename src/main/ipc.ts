@@ -42,17 +42,40 @@ import { isDeckGameMode, showGamePage } from "./utils/steamOS";
 import { isValidVencordInstall } from "./utils/vencordLoader";
 import { VENCORD_FILES_DIR } from "./vencordFilesDir";
 
+const rendererScriptCache = new Map<string, string>();
+let rendererCssCache: Promise<string> | undefined;
+
+function readRendererScript(filePath: string) {
+    if (IS_DEV) return readFileSync(filePath, "utf-8");
+
+    const cached = rendererScriptCache.get(filePath);
+    if (cached !== undefined) return cached;
+
+    const script = readFileSync(filePath, "utf-8");
+    rendererScriptCache.set(filePath, script);
+    return script;
+}
+
 handleSync(IpcEvents.GET_VENCORD_PRELOAD_SCRIPT, () =>
-    readFileSync(join(VENCORD_FILES_DIR, "vencordDesktopPreload.js"), "utf-8")
+    readRendererScript(join(VENCORD_FILES_DIR, "vencordDesktopPreload.js"))
 );
 handleSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT, () =>
-    readFileSync(join(VENCORD_FILES_DIR, "vencordDesktopRenderer.js"), "utf-8")
+    readRendererScript(join(VENCORD_FILES_DIR, "vencordDesktopRenderer.js"))
 );
 
 const VESKTOP_RENDERER_JS_PATH = join(__dirname, "renderer.js");
 const VESKTOP_RENDERER_CSS_PATH = join(__dirname, "renderer.css");
-handleSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT, () => readFileSync(VESKTOP_RENDERER_JS_PATH, "utf-8"));
-handle(IpcEvents.GET_VESKTOP_RENDERER_CSS, () => readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8"));
+handleSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT, () => readRendererScript(VESKTOP_RENDERER_JS_PATH));
+handle(IpcEvents.GET_VESKTOP_RENDERER_CSS, () => {
+    if (IS_DEV) return readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8");
+    if (!rendererCssCache) {
+        rendererCssCache = readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8").catch(error => {
+            rendererCssCache = undefined;
+            throw error;
+        });
+    }
+    return rendererCssCache;
+});
 
 if (IS_DEV) {
     watch(VESKTOP_RENDERER_CSS_PATH, { persistent: false }, async () => {
