@@ -4,57 +4,29 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { mkdirSync } from "fs";
-import { access, constants as FsConstants, writeFile } from "fs/promises";
-import { VENCORD_FILES_DIR } from "main/vencordFilesDir";
+import { access, constants as FsConstants, copyFile, mkdir } from "fs/promises";
+import { BUNDLED_VENCORD_FILES_DIR, VENCORD_FILES_DIR } from "main/vencordFilesDir";
 import { join } from "path";
 
-import { USER_AGENT } from "../constants";
-import { downloadFile, fetchie } from "./http";
-
-const API_BASE = "https://api.github.com";
-
-export const FILES_TO_DOWNLOAD = [
+export const REQUIRED_VENCORD_FILES = [
     "vencordDesktopMain.js",
     "vencordDesktopPreload.js",
     "vencordDesktopRenderer.js",
     "vencordDesktopRenderer.css"
 ];
 
-export interface ReleaseData {
-    name: string;
-    tag_name: string;
-    html_url: string;
-    assets: Array<{
-        name: string;
-        browser_download_url: string;
-    }>;
-}
+export async function restoreBundledVencordFiles() {
+    if (VENCORD_FILES_DIR === BUNDLED_VENCORD_FILES_DIR) return;
 
-export async function githubGet(endpoint: string) {
-    const opts: RequestInit = {
-        headers: {
-            Accept: "application/vnd.github+json",
-            "User-Agent": USER_AGENT
-        }
-    };
+    if (!(await isValidVencordInstall(BUNDLED_VENCORD_FILES_DIR))) {
+        throw new Error("Bundled Vencord files are missing. Run `pnpm build` to rebuild them from Vencord.");
+    }
 
-    if (process.env.GITHUB_TOKEN) (opts.headers! as any).Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
-
-    return fetchie(API_BASE + endpoint, opts, { retryOnNetworkError: true });
-}
-
-export async function downloadVencordFiles() {
-    const release = await githubGet("/repos/Vendicated/Vencord/releases/latest");
-
-    const { assets }: ReleaseData = await release.json();
-
+    await mkdir(VENCORD_FILES_DIR, { recursive: true });
     await Promise.all(
-        assets
-            .filter(({ name }) => FILES_TO_DOWNLOAD.some(f => name.startsWith(f)))
-            .map(({ name, browser_download_url }) =>
-                downloadFile(browser_download_url, join(VENCORD_FILES_DIR, name), {}, { retryOnNetworkError: true })
-            )
+        REQUIRED_VENCORD_FILES.map(file =>
+            copyFile(join(BUNDLED_VENCORD_FILES_DIR, file), join(VENCORD_FILES_DIR, file))
+        )
     );
 }
 
@@ -64,14 +36,16 @@ const existsAsync = (path: string) =>
         .catch(() => false);
 
 export async function isValidVencordInstall(dir: string) {
-    const results = await Promise.all(FILES_TO_DOWNLOAD.map(f => existsAsync(join(dir, f))));
+    const results = await Promise.all(REQUIRED_VENCORD_FILES.map(f => existsAsync(join(dir, f))));
     return !results.includes(false);
 }
 
 export async function ensureVencordFiles() {
     if (await isValidVencordInstall(VENCORD_FILES_DIR)) return;
 
-    mkdirSync(VENCORD_FILES_DIR, { recursive: true });
+    await restoreBundledVencordFiles();
 
-    await Promise.all([downloadVencordFiles(), writeFile(join(VENCORD_FILES_DIR, "package.json"), "{}")]);
+    if (!(await isValidVencordInstall(VENCORD_FILES_DIR))) {
+        throw new Error("Vencord files are missing. Run `pnpm build` to build the local Vencord source.");
+    }
 }

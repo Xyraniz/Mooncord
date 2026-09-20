@@ -1,0 +1,12 @@
+This directory contains a vendored snapshot of Vencord.
+
+Source repository: https://github.com/Vendicated/Vencord
+Source commit: 59a54286
+
+Mooncord builds the Vencord Desktop artifacts locally from this directory. Edit
+plugins under src/plugins, then run `pnpm build` from the Mooncord repository.
+The generated artifacts are copied to static/vencord and are intentionally
+ignored by Git.
+
+Mooncord builds Vencord with its updater disabled so local plugin edits cannot
+be replaced by a release download at runtime.

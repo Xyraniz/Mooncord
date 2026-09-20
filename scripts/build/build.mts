@@ -5,12 +5,74 @@
  */
 
 import { BuildContext, BuildOptions, context } from "esbuild";
-import { copyFile } from "fs/promises";
+import { copyFile, mkdir, readdir, rm } from "fs/promises";
+import { existsSync } from "fs";
+import { spawnSync } from "child_process";
+import { join, resolve } from "path";
 
 import vencordDep from "./vencordDep.mjs";
 import { includeDirPlugin } from "./includeDirPlugin.mts";
 
 const isDev = process.argv.includes("--dev");
+const isVencordOnly = process.argv.includes("--vencord-only");
+
+const VENCORD_ROOT = resolve("Vencord");
+const VENCORD_DIST_DIR = join(VENCORD_ROOT, "dist");
+const VENCORD_STATIC_DIR = resolve("static/vencord");
+const VENCORD_ARTIFACT_PREFIXES = [
+    "vencordDesktopMain.js",
+    "vencordDesktopPreload.js",
+    "vencordDesktopRenderer.js",
+    "vencordDesktopRenderer.css"
+];
+
+function runPnpm(args: string[]) {
+    const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+    const result = spawnSync(pnpm, args, {
+        cwd: VENCORD_ROOT,
+        env: {
+            ...process.env,
+            CI: process.env.CI ?? "true",
+            VENCORD_HASH: process.env.VENCORD_HASH || "vendored",
+            VENCORD_REMOTE: process.env.VENCORD_REMOTE || "Vendicated/Vencord"
+        },
+        shell: process.platform === "win32",
+        stdio: "inherit"
+    });
+
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`Vencord command failed with exit code ${result.status ?? "unknown"}`);
+}
+
+async function buildVencord() {
+    if (!existsSync(VENCORD_ROOT)) {
+        throw new Error(`Vencord source is missing: ${VENCORD_ROOT}`);
+    }
+
+    if (!existsSync(join(VENCORD_ROOT, "node_modules", "esbuild"))) {
+        console.log("Installing Vencord dependencies...");
+        runPnpm(["install", "--frozen-lockfile"]);
+    }
+
+    console.log("Building Vencord...");
+    runPnpm(["build", "--standalone", "--disable-updater", ...(isDev ? ["--dev"] : [])]);
+
+    const files = (await readdir(VENCORD_DIST_DIR)).filter(name =>
+        VENCORD_ARTIFACT_PREFIXES.some(prefix => name.startsWith(prefix))
+    );
+    const missing = VENCORD_ARTIFACT_PREFIXES.filter(prefix => !files.some(file => file.startsWith(prefix)));
+    if (missing.length) {
+        throw new Error(`Vencord did not produce the required artifacts: ${missing.join(", ")}`);
+    }
+
+    await rm(VENCORD_STATIC_DIR, { recursive: true, force: true });
+    await mkdir(VENCORD_STATIC_DIR, { recursive: true });
+    await Promise.all(files.map(file => copyFile(join(VENCORD_DIST_DIR, file), join(VENCORD_STATIC_DIR, file))));
+    console.log(`Copied ${files.length} local Vencord artifacts to ${VENCORD_STATIC_DIR}`);
+}
+
+await buildVencord();
+if (isVencordOnly) process.exit(0);
 
 const CommonOpts: BuildOptions = {
     minify: !isDev,

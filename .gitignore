@@ -1,7 +1,10 @@
 dist
 dist-portable
+static/vencord
 Data
 node_modules
+Vencord/node_modules
+Vencord/dist
 .env
 .DS_Store
 .idea/

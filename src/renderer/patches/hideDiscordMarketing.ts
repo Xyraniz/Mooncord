@@ -1,4 +1,10 @@
 /*
+ * Vesktop, a desktop app aiming to give you a snappier Discord Experience
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+/*
  * Discord occasionally adds its desktop-download prompt from the renderer
  * after the initial React tree has mounted. Keep the fallback deliberately
  * narrow: remove only known download targets, never generic banners or
@@ -7,9 +13,9 @@
 
 const MARKETING_SELECTORS = [
     "#app-download-button",
-    "[data-testid=\"app-download-button\"]",
-    "a[href=\"https://discord.com/download\"]",
-    "a[href^=\"https://discord.com/download?\"]"
+    '[data-testid="app-download-button"]',
+    'a[href="https://discord.com/download"]',
+    'a[href^="https://discord.com/download?"]'
 ].join(",");
 
 let removalScheduled = false;

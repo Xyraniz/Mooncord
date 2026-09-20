@@ -5,9 +5,10 @@
  */
 
 import { join } from "path";
+import { STATIC_DIR } from "shared/paths";
 
-import { SESSION_DATA_DIR } from "./constants";
 import { State } from "./settings";
 
 // this is in a separate file to avoid circular dependencies
-export const VENCORD_FILES_DIR = State.store.vencordDir || join(SESSION_DATA_DIR, "vencordFiles");
+export const BUNDLED_VENCORD_FILES_DIR = join(STATIC_DIR, "vencord");
+export const VENCORD_FILES_DIR = State.store.vencordDir || BUNDLED_VENCORD_FILES_DIR;

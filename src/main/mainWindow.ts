@@ -35,7 +35,7 @@ import { destroyTray, initTray } from "./tray";
 import { clearData } from "./utils/clearData";
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
 import { applyDeckKeyboardFix, askToApplySteamLayout, isDeckGameMode } from "./utils/steamOS";
-import { downloadVencordFiles, ensureVencordFiles } from "./utils/vencordLoader";
+import { ensureVencordFiles, restoreBundledVencordFiles } from "./utils/vencordLoader";
 import { VENCORD_FILES_DIR } from "./vencordFilesDir";
 
 let isQuitting = false;
@@ -82,9 +82,9 @@ function initMenuBar(win: BrowserWindow) {
             click: createAboutWindow
         },
         {
-            label: "Actualizar plugins de Vencord",
+            label: "Restaurar plugins locales de Vencord",
             async click() {
-                await downloadVencordFiles();
+                await restoreBundledVencordFiles();
                 app.relaunch();
                 app.quit();
             },

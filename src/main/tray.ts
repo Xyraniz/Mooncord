@@ -11,7 +11,7 @@ import { AppEvents } from "./events";
 import { Settings } from "./settings";
 import { resolveAssetPath } from "./userAssets";
 import { clearData } from "./utils/clearData";
-import { downloadVencordFiles } from "./utils/vencordLoader";
+import { restoreBundledVencordFiles } from "./utils/vencordLoader";
 
 let tray: Tray;
 let trayVariant: "tray" | "trayUnread" = "tray";
@@ -53,9 +53,9 @@ export async function initTray(win: BrowserWindow, setIsQuitting: (val: boolean)
             click: createAboutWindow
         },
         {
-            label: "Repair Vencord plugins",
+            label: "Restore bundled Vencord plugins",
             async click() {
-                await downloadVencordFiles();
+                await restoreBundledVencordFiles();
                 app.relaunch();
                 app.quit();
             }

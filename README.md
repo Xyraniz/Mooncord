@@ -56,6 +56,12 @@ cd Mooncord
 pnpm install
 ```
 
+Mooncord includes a local snapshot of the Vencord source under
+`Vencord`. The first `pnpm build` installs that snapshot's dependencies
+if needed, builds its Desktop bundles, and copies the generated files into
+`static/vencord`. Mooncord therefore does not need to download Vencord on first
+launch.
+
 Run the client from source:
 
 ```sh
@@ -67,6 +73,9 @@ Useful development commands:
 ```sh
 # Build the renderer, preload, and main-process bundles
 pnpm build
+
+# Build only the vendored Vencord bundles
+pnpm build:vencord
 
 # Build in development mode
 pnpm build:dev
@@ -126,7 +135,11 @@ The `Data` directory contains the application's settings and the browser session
 
 Rich Presence is disabled by default in Mooncord. It can be enabled from the client settings when needed; enabling it starts the `arRPC` worker on demand, and disabling it stops the worker.
 
-Vencord plugins remain optional. Enable only the plugins you use, since each plugin can add work to Discord's renderer or network-facing features. Mooncord's shell and performance changes are separate from Vencord plugin configuration.
+Vencord plugins remain optional. The editable source is in
+`Vencord/src/plugins`; edit or add a plugin there and run `pnpm build` to
+compile it into Mooncord. Enable only the plugins you use, since each plugin can
+add work to Discord's renderer or network-facing features. Mooncord's shell and
+performance changes are separate from Vencord plugin configuration.
 
 ## Troubleshooting
 
@@ -144,12 +157,18 @@ Passkey prompts are intentionally disabled inside Mooncord so launching the clie
 src/main/       Electron main process, window lifecycle, settings, tray, and arRPC
 src/preload/    Native bridge and the Mooncord shell injected around Discord
 src/renderer/   Discord/Vencord renderer patches and client fixes
+Vencord/         Local Vencord source, including editable plugins
 static/         Splash, branding, and static application assets
 build/          Application icon and build resources
 ```
 
 ## Credits and licensing
 
-Mooncord builds on the open-source Electron desktop architecture and Vencord integration used by the upstream project this repository originated from. Upstream notices and third-party licenses remain in the repository; see [LICENSE](LICENSE) and the relevant package directories before redistributing a build.
+Mooncord builds on the open-source Electron desktop architecture and Vencord
+integration used by the upstream project this repository originated from. The
+Vencord source snapshot and its license are included under
+[`Vencord`](Vencord). Upstream notices and third-party licenses
+remain in the repository; see [LICENSE](LICENSE) and the relevant package
+directories before redistributing a build.
 
 Mooncord itself is distributed under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE) for the complete license text.
