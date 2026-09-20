@@ -8,7 +8,19 @@ import { randomUUID } from "crypto";
 import { BrowserWindow, WebContents, WebContentsView } from "electron";
 import { join } from "path";
 import { IpcEvents } from "shared/IpcEvents";
-import type { MooncordTabInfo, MooncordTabsState } from "shared/mooncordTabs";
+import {
+    canLoadMooncordTab,
+    getFallbackActiveMooncordTabId,
+    getMooncordTabBounds,
+    MAX_MOONCORD_TABS,
+    type MooncordTabInfo,
+    type MooncordTabRecord,
+    type MooncordTabsState,
+    moveMooncordTab,
+    normalizeCustomMooncordTabTitle,
+    restoreMooncordTabs,
+    sanitizeDiscordPath
+} from "shared/mooncordTabs";
 
 import { BrowserUserAgent } from "./constants";
 import { AppEvents } from "./events";
@@ -17,8 +29,6 @@ import { updateSplashMessage } from "./splash";
 import { handle } from "./utils/ipcWrappers";
 import { makeWebContentsLinksOpenExternally } from "./utils/makeLinksOpenExternally";
 
-const MAX_TABS = 8;
-const TOOLBAR_HEIGHT = 54;
 const HOME_PATH = "/channels/@me";
 const DISCORD_SCHEME_PROTOCOLS = new Set(["discord:", "discordapp:", "discord-canary:", "discord-ptb:"]);
 const HIDE_DISCORD_WINDOW_CHROME = `
@@ -28,10 +38,10 @@ const HIDE_DISCORD_WINDOW_CHROME = `
     }
 `;
 
-interface DiscordTab extends MooncordTabInfo {
+interface DiscordTab extends MooncordTabRecord {
     view: WebContentsView;
-    loaded: boolean;
-    loading: boolean;
+    loadStatus: MooncordTabInfo["loadStatus"];
+    loadGeneration: number;
     retryTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -47,13 +57,7 @@ function discordOrigin() {
 }
 
 function safePath(path: unknown): string {
-    if (typeof path !== "string" || !path.startsWith("/") || path.startsWith("//")) return HOME_PATH;
-    try {
-        const url = new URL(path, discordOrigin());
-        return url.origin === discordOrigin() ? `${url.pathname}${url.search}${url.hash}` : HOME_PATH;
-    } catch {
-        return HOME_PATH;
-    }
+    return sanitizeDiscordPath(path, discordOrigin(), HOME_PATH);
 }
 
 function pathTitle(path: string, index: number) {
@@ -70,13 +74,24 @@ function cleanTitle(title: string, tab: DiscordTab) {
 
 function publicState(): MooncordTabsState {
     return {
-        tabs: tabs.map(({ id, path, title }) => ({ id, path, title })),
+        tabs: tabs.map(({ id, path, title, customTitle, loadStatus }) => ({
+            id,
+            path,
+            title,
+            ...(customTitle ? { customTitle } : {}),
+            loadStatus
+        })),
         activeId
     };
 }
 
 function persistState() {
-    State.store.mooncordTabs = publicState().tabs;
+    State.store.mooncordTabs = tabs.map(({ id, path, title, customTitle }) => ({
+        id,
+        path,
+        title,
+        ...(customTitle ? { customTitle } : {})
+    }));
     State.store.activeMooncordTabId = activeId;
 }
 
@@ -90,9 +105,8 @@ function broadcastState() {
 function updateBounds() {
     if (!shellWindow || shellWindow.isDestroyed()) return;
     const [width, height] = shellWindow.getContentSize();
-    for (const tab of tabs) {
-        tab.view.setBounds({ x: 0, y: TOOLBAR_HEIGHT, width, height: Math.max(0, height - TOOLBAR_HEIGHT) });
-    }
+    const bounds = getMooncordTabBounds(width, height);
+    for (const tab of tabs) tab.view.setBounds(bounds);
 }
 
 function activeTab() {
@@ -111,25 +125,35 @@ function emitAppLoaded() {
 }
 
 function loadTab(tab: DiscordTab) {
-    if (tab.loaded || tab.loading || tab.view.webContents.isDestroyed()) return;
-    tab.loading = true;
+    if (!canLoadMooncordTab(tab.loadStatus) || tab.view.webContents.isDestroyed()) return;
+    if (tab.retryTimer) clearTimeout(tab.retryTimer);
+    tab.retryTimer = undefined;
+    const loadGeneration = ++tab.loadGeneration;
+    tab.loadStatus = "loading";
     const url = `${discordOrigin()}${safePath(tab.path)}`;
     updateSplashMessage("Conectando con Discord...");
 
     tab.view.webContents
         .loadURL(url)
         .then(() => {
-            tab.loading = false;
-            tab.loaded = true;
+            if (tab.loadGeneration !== loadGeneration || tab.loadStatus === "crashed") return;
+            tab.loadStatus = "loaded";
             emitAppLoaded();
+            broadcastState();
         })
         .catch(error => {
-            tab.loading = false;
             if (tab.view.webContents.isDestroyed()) return;
+            if (tab.loadGeneration !== loadGeneration || tab.loadStatus === "crashed") return;
+            tab.loadStatus = "idle";
+            broadcastState();
             const description = error?.code || error?.message || "Error de conexión";
             console.error(`Failed to load Discord tab ${tab.id}:`, error);
             updateSplashMessage(`No se pudo cargar Discord: ${description}`);
-            tab.retryTimer = setTimeout(() => loadTab(tab), 1000);
+            if (tab.retryTimer) clearTimeout(tab.retryTimer);
+            tab.retryTimer = setTimeout(() => {
+                tab.retryTimer = undefined;
+                loadTab(tab);
+            }, 1000);
         });
 }
 
@@ -147,7 +171,7 @@ function updateTabFromNavigation(tab: DiscordTab, url: string) {
     }
 }
 
-function createDiscordTab(window: BrowserWindow, info: MooncordTabInfo): DiscordTab {
+function createDiscordTab(window: BrowserWindow, info: MooncordTabRecord): DiscordTab {
     const view = new WebContentsView({
         webPreferences: {
             nodeIntegration: false,
@@ -156,11 +180,11 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabInfo): Discord
             devTools: true,
             preload: join(__dirname, "preload.js"),
             spellcheck: true,
-            // Keep Discord's renderer alive when its tab is hidden.
-            backgroundThrottling: false
+            // Hidden tabs keep their in-memory state while Chromium throttles background work.
+            backgroundThrottling: true
         }
     });
-    const tab: DiscordTab = { ...info, path: safePath(info.path), view, loaded: false, loading: false };
+    const tab: DiscordTab = { ...info, path: safePath(info.path), view, loadStatus: "idle", loadGeneration: 0 };
     window.contentView.addChildView(view);
     view.setVisible(false);
     view.webContents.setUserAgent(BrowserUserAgent);
@@ -181,10 +205,11 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabInfo): Discord
             return;
         }
         if (responseCode >= 300 && pathname !== "/app") {
-            tab.loaded = false;
+            const wasLoading = tab.loadStatus === "loading";
+            tab.loadStatus = "idle";
             tab.path = HOME_PATH;
             console.warn(`Discord tab returned HTTP ${responseCode}; navigating to the home screen.`);
-            loadTab(tab);
+            if (!wasLoading) loadTab(tab);
         }
     });
     view.webContents.on("did-navigate-in-page", (_event, url) => updateTabFromNavigation(tab, url));
@@ -215,9 +240,14 @@ function createDiscordTab(window: BrowserWindow, info: MooncordTabInfo): Discord
     });
     view.webContents.on("devtools-opened", () => sendToTab(tab, IpcEvents.DEVTOOLS_OPENED));
     view.webContents.on("devtools-closed", () => sendToTab(tab, IpcEvents.DEVTOOLS_CLOSED));
-    view.webContents.on("render-process-gone", (_event, details) =>
-        console.error("Discord tab renderer exited:", details)
-    );
+    view.webContents.on("render-process-gone", (_event, details) => {
+        tab.loadGeneration++;
+        if (tab.retryTimer) clearTimeout(tab.retryTimer);
+        tab.retryTimer = undefined;
+        tab.loadStatus = "crashed";
+        console.error("Discord tab renderer exited:", details);
+        broadcastState();
+    });
     view.webContents.on("destroyed", () => {
         if (tab.retryTimer) clearTimeout(tab.retryTimer);
     });
@@ -245,7 +275,7 @@ function disposeTab(tab: DiscordTab) {
 }
 
 function createTab() {
-    if (!shellWindow || shellWindow.isDestroyed() || tabs.length >= MAX_TABS) return publicState();
+    if (!shellWindow || shellWindow.isDestroyed() || tabs.length >= MAX_MOONCORD_TABS) return publicState();
     const tab = createDiscordTab(shellWindow, { id: randomUUID(), path: HOME_PATH, title: "Inicio" });
     tabs.push(tab);
     return setActive(tab.id);
@@ -258,8 +288,42 @@ function closeTab(id: string) {
     const [removed] = tabs.splice(index, 1);
     const wasActive = removed.id === activeId;
     disposeTab(removed);
-    if (wasActive) activeId = tabs[Math.max(0, index - 1)]?.id ?? tabs[0].id;
+    if (wasActive) activeId = getFallbackActiveMooncordTabId(tabs, index);
     return setActive(activeId);
+}
+
+function renameTab(id: string, title: unknown) {
+    const tab = tabs.find(item => item.id === id);
+    if (!tab) return publicState();
+
+    const customTitle = normalizeCustomMooncordTabTitle(title);
+    if (tab.customTitle === customTitle) return publicState();
+    if (customTitle) tab.customTitle = customTitle;
+    else delete tab.customTitle;
+
+    broadcastState();
+    return publicState();
+}
+
+function reorderTab(id: string, targetId: string, after: boolean) {
+    if (!tabs.some(tab => tab.id === id) || !tabs.some(tab => tab.id === targetId)) return publicState();
+    tabs = moveMooncordTab(tabs, id, targetId, after);
+    broadcastState();
+    return publicState();
+}
+
+function reloadActiveTab() {
+    const tab = activeTab();
+    if (!tab || tab.view.webContents.isDestroyed()) return;
+
+    if (tab.loadStatus === "crashed" || tab.loadStatus === "idle") {
+        if (tab.loadStatus === "crashed") tab.loadStatus = "idle";
+        loadTab(tab);
+        broadcastState();
+        return;
+    }
+
+    tab.view.webContents.reload();
 }
 
 function resetTabs() {
@@ -319,38 +383,30 @@ export function initializeDiscordTabs(window: BrowserWindow, uri?: string) {
             return HOME_PATH;
         }
     })();
-    const storedTabs = stored.slice(0, MAX_TABS).map((tab, index) => ({
-        id: typeof tab.id === "string" && tab.id ? tab.id : randomUUID(),
-        path: safePath(tab.path),
-        title: typeof tab.title === "string" && tab.title ? tab.title : pathTitle(safePath(tab.path), index + 1)
-    }));
-
-    if (initialPath) {
-        const existing = storedTabs.find(tab => tab.path === initialPath);
-        if (existing) State.store.activeMooncordTabId = existing.id;
-        else {
-            const deepLinkTab = { id: randomUUID(), path: initialPath, title: pathTitle(initialPath, 1) };
-            storedTabs.unshift(deepLinkTab);
-            State.store.activeMooncordTabId = deepLinkTab.id;
-        }
+    const restored = restoreMooncordTabs({
+        storedTabs: Array.isArray(stored) ? stored : [],
+        storedActiveId: State.store.activeMooncordTabId,
+        initialPath,
+        homePath: HOME_PATH,
+        maxTabs: MAX_MOONCORD_TABS,
+        createId: randomUUID,
+        safePath,
+        pathTitle
+    });
+    for (const info of restored.tabs) {
+        const tabInfo = { ...info, loadStatus: "idle" as const };
+        tabs.push(createDiscordTab(window, tabInfo));
     }
-    if (!storedTabs.length) storedTabs.push({ id: randomUUID(), path: HOME_PATH, title: "Inicio" });
-
-    const uniqueTabs = storedTabs.slice(0, MAX_TABS);
-    const ids = new Set<string>();
-    for (const info of uniqueTabs) {
-        if (ids.has(info.id)) info.id = randomUUID();
-        ids.add(info.id);
-        tabs.push(createDiscordTab(window, info));
-    }
-    activeId = tabs.some(tab => tab.id === State.store.activeMooncordTabId)
-        ? State.store.activeMooncordTabId!
-        : tabs[0].id;
+    activeId = restored.activeId;
 
     handle(IpcEvents.GET_MOONCORD_TABS, () => publicState());
     handle(IpcEvents.SELECT_MOONCORD_TAB, (_event, id: string) => setActive(id));
     handle(IpcEvents.CREATE_MOONCORD_TAB, () => createTab());
     handle(IpcEvents.CLOSE_MOONCORD_TAB, (_event, id: string) => closeTab(id));
+    handle(IpcEvents.RENAME_MOONCORD_TAB, (_event, id: string, title: string) => renameTab(id, title));
+    handle(IpcEvents.REORDER_MOONCORD_TAB, (_event, id: string, targetId: string, after: boolean) =>
+        reorderTab(id, targetId, after)
+    );
     handle(IpcEvents.RESET_MOONCORD_TABS, () => resetTabs());
     handle(IpcEvents.OPEN_DISCORD_SETTINGS, () => openDiscordSettings());
     handle(IpcEvents.DISCORD_BACK, () => {
@@ -361,7 +417,7 @@ export function initializeDiscordTabs(window: BrowserWindow, uri?: string) {
         const contents = getActiveDiscordWebContents();
         if (contents?.canGoForward()) contents.goForward();
     });
-    handle(IpcEvents.DISCORD_RELOAD, () => getActiveDiscordWebContents()?.reload());
+    handle(IpcEvents.DISCORD_RELOAD, () => reloadActiveTab());
 
     window.on("resize", updateBounds);
     window.on("closed", () => {

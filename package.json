@@ -20,7 +20,8 @@
         "start": "pnpm build && electron .",
         "start:dev": "pnpm build:dev && electron .",
         "start:watch": "pnpm build:dev && tsx scripts/startWatch.mts",
-        "test": "pnpm lint && pnpm testTypes",
+        "test": "pnpm test:unit && pnpm lint && pnpm testTypes",
+        "test:unit": "tsx --test test/mooncordTabs.test.ts test/pendingIpcCommands.test.ts",
         "testTypes": "tsc --noEmit",
         "watch": "pnpm build --watch",
         "generateMeta": "tsx scripts/utils/generateMeta.mts"

@@ -115,7 +115,9 @@ function initMenuBar(win: BrowserWindow) {
                       label: "Settings",
                       accelerator: "CmdOrCtrl+,",
                       async click() {
-                          sendRendererCommand(IpcCommands.NAVIGATE_SETTINGS);
+                          await sendRendererCommand(IpcCommands.NAVIGATE_SETTINGS).catch(error => {
+                              console.warn("Could not open Discord settings from the menu:", error);
+                          });
                       }
                   },
                   {
@@ -256,7 +258,14 @@ function initSettingsListeners(win: BrowserWindow) {
 }
 
 async function initSpellCheckLanguages(languages?: string[]) {
-    languages ??= await sendRendererCommand(IpcCommands.GET_LANGUAGES);
+    if (!languages) {
+        try {
+            languages = await sendRendererCommand(IpcCommands.GET_LANGUAGES);
+        } catch (error) {
+            console.warn("Could not load Discord's spell-check languages:", error);
+            return;
+        }
+    }
     if (!languages) return;
 
     const ses = session.defaultSession;
@@ -389,8 +398,7 @@ function createMainWindow() {
 
     const win = (mainWin = new BrowserWindow(buildBrowserWindowOptions()));
 
-    // The shell is separate from the Discord views. Discord tab renderers
-    // keep background throttling disabled so hidden tabs retain their state.
+    // The shell renderer does not need to render continuously while the window is hidden.
     const syncBackgroundThrottling = () => {
         if (!win.isDestroyed()) win.webContents.setBackgroundThrottling(!win.isVisible() || win.isMinimized());
     };

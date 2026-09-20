@@ -8,9 +8,9 @@ import { contextBridge, ipcRenderer } from "electron/renderer";
 import { IpcEvents } from "shared/IpcEvents";
 import type { MooncordTabsState } from "shared/mooncordTabs";
 
-import { installMooncordShell } from "./mooncordShell";
+import { installMooncordShell, type MooncordShellNativeApi } from "./mooncordShell";
 
-contextBridge.exposeInMainWorld("MooncordShellNative", {
+const mooncordShellNative: MooncordShellNativeApi = {
     getState: () => ipcRenderer.invoke(IpcEvents.GET_MOONCORD_TABS) as Promise<MooncordTabsState>,
     onStateChanged(callback: (state: MooncordTabsState) => void) {
         const listener = (_event: Electron.IpcRendererEvent, state: MooncordTabsState) => callback(state);
@@ -20,6 +20,9 @@ contextBridge.exposeInMainWorld("MooncordShellNative", {
     selectTab: (id: string) => ipcRenderer.invoke(IpcEvents.SELECT_MOONCORD_TAB, id),
     createTab: () => ipcRenderer.invoke(IpcEvents.CREATE_MOONCORD_TAB),
     closeTab: (id: string) => ipcRenderer.invoke(IpcEvents.CLOSE_MOONCORD_TAB, id),
+    renameTab: (id: string, title: string) => ipcRenderer.invoke(IpcEvents.RENAME_MOONCORD_TAB, id, title),
+    reorderTab: (id: string, targetId: string, after: boolean) =>
+        ipcRenderer.invoke(IpcEvents.REORDER_MOONCORD_TAB, id, targetId, after),
     resetTabs: () => ipcRenderer.invoke(IpcEvents.RESET_MOONCORD_TABS),
     openDiscordSettings: () => ipcRenderer.invoke(IpcEvents.OPEN_DISCORD_SETTINGS),
     goBack: () => ipcRenderer.invoke(IpcEvents.DISCORD_BACK),
@@ -29,6 +32,8 @@ contextBridge.exposeInMainWorld("MooncordShellNative", {
     maximize: () => ipcRenderer.invoke(IpcEvents.MAXIMIZE),
     closeWindow: () => ipcRenderer.invoke(IpcEvents.CLOSE),
     toggleDevTools: () => ipcRenderer.invoke(IpcEvents.TOGGLE_DEVTOOLS)
-});
+};
 
-installMooncordShell();
+contextBridge.exposeInMainWorld("MooncordShellNative", mooncordShellNative);
+
+installMooncordShell(mooncordShellNative);

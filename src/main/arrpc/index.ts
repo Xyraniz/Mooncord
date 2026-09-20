@@ -38,7 +38,9 @@ export async function initArRPC() {
         port.on("message", async ({ type, nonce, data }: ArRpcEvent) => {
             switch (type) {
                 case "activity": {
-                    sendRendererCommand(IpcCommands.RPC_ACTIVITY, data);
+                    void sendRendererCommand(IpcCommands.RPC_ACTIVITY, data).catch(error => {
+                        console.warn("Could not forward Rich Presence to the active Discord tab:", error);
+                    });
                     break;
                 }
 

@@ -13,11 +13,11 @@ Mooncord is not affiliated with Discord Inc. You still sign in through Discord's
 ## What Mooncord includes
 
 - A custom Mooncord title bar with window controls and lightweight navigation tabs.
-- Up to eight Discord tabs, each with its own live client view. Switching tabs preserves the open chat and its in-memory state; tabs share one signed-in account session.
+- Up to eight Discord tabs, each with its own live client view. Double-click a tab name to rename it and drag tabs to reorder them. Switching tabs preserves the open chat and its in-memory state; tabs share one signed-in account session.
 - Discord's real-time web client, including messages, servers, calls, notifications, and account settings.
 - Vencord integration for optional client plugins. Vencord is an integration layer in Mooncord, not a second Discord client or a replacement for Discord's service.
 - A dark, monochrome Mooncord theme and branded splash, tray, and application icons.
-- Dynamic background throttling: the foreground window remains responsive, while a hidden or minimized window lets Chromium reduce timer and rendering work.
+- Hidden Discord tabs keep their in-memory state while Chromium throttles background timer and rendering work; a renderer crash can be recovered by selecting or reloading that tab.
 - Lazy Rich Presence (`arRPC`): the worker stays stopped unless Rich Presence is enabled.
 - Targeted removal of known Discord desktop-download promotions without hiding generic Discord layout containers.
 - A persistent portable data directory so cookies, settings, and the Discord session survive closing and reopening the portable executable.

@@ -10,8 +10,14 @@ import { IpcEvents } from "shared/IpcEvents";
 
 import { getActiveDiscordWebContents } from "./discordTabs";
 import { mainWin } from "./mainWindow";
+import { PendingIpcCommands } from "./utils/pendingIpcCommands";
 
-const resolvers = new Map<string, Record<"resolve" | "reject", (data: any) => void>>();
+const COMMAND_TIMEOUT_MS = 30_000;
+const pendingCommands = new PendingIpcCommands();
+const contentsWatchers = new Map<
+    number,
+    { contents: Electron.WebContents; onRenderProcessGone: () => void; onDestroyed: () => void }
+>();
 
 export interface IpcMessage {
     nonce: string;
@@ -23,6 +29,31 @@ export interface IpcResponse {
     nonce: string;
     ok: boolean;
     data?: any;
+}
+
+function cleanupContentsWatcher(webContentsId: number) {
+    if (pendingCommands.hasPendingForWebContents(webContentsId)) return;
+    const watcher = contentsWatchers.get(webContentsId);
+    if (!watcher) return;
+
+    watcher.contents.removeListener("render-process-gone", watcher.onRenderProcessGone);
+    watcher.contents.removeListener("destroyed", watcher.onDestroyed);
+    contentsWatchers.delete(webContentsId);
+}
+
+function watchContents(contents: Electron.WebContents) {
+    if (contentsWatchers.has(contents.id)) return;
+
+    const rejectPending = (reason: Error) => {
+        pendingCommands.rejectForWebContents(contents.id, reason);
+        cleanupContentsWatcher(contents.id);
+    };
+    const onRenderProcessGone = () => rejectPending(new Error("Discord tab renderer exited before replying"));
+    const onDestroyed = () => rejectPending(new Error("Discord tab was closed before replying"));
+
+    contentsWatchers.set(contents.id, { contents, onRenderProcessGone, onDestroyed });
+    contents.on("render-process-gone", onRenderProcessGone);
+    contents.on("destroyed", onDestroyed);
 }
 
 /**
@@ -40,24 +71,31 @@ export function sendRendererCommand<T = any>(message: string, data?: any) {
 
     const nonce = randomUUID();
 
-    const promise = new Promise<T>((resolve, reject) => {
-        resolvers.set(nonce, { resolve, reject });
-    });
+    const promise = pendingCommands.register<T>(nonce, contents.id, COMMAND_TIMEOUT_MS);
+    watchContents(contents);
+    void promise.then(
+        () => cleanupContentsWatcher(contents.id),
+        () => cleanupContentsWatcher(contents.id)
+    );
 
-    contents.send(IpcEvents.IPC_COMMAND, { nonce, message, data });
+    try {
+        if (contents.isDestroyed()) throw new Error("Discord tab was closed before sending the command");
+        contents.send(IpcEvents.IPC_COMMAND, { nonce, message, data });
+    } catch (error) {
+        pendingCommands.reject(nonce, error);
+    }
 
     return promise;
 }
 
-ipcMain.on(IpcEvents.IPC_COMMAND, (_event, { nonce, ok, data }: IpcResponse) => {
-    const resolver = resolvers.get(nonce);
-    if (!resolver) throw new Error(`Unknown message: ${nonce}`);
-
-    if (ok) {
-        resolver.resolve(data);
-    } else {
-        resolver.reject(data);
+ipcMain.on(IpcEvents.IPC_COMMAND, (event, response: IpcResponse) => {
+    if (!response || typeof response.nonce !== "string" || typeof response.ok !== "boolean") {
+        console.warn("Ignoring malformed renderer IPC response");
+        return;
     }
 
-    resolvers.delete(nonce);
+    const resolved = pendingCommands.resolve(response.nonce, event.sender.id, response.ok, response.data);
+    if (!resolved) {
+        console.warn("Ignoring unknown, expired, or mismatched renderer IPC response:", response.nonce);
+    }
 });

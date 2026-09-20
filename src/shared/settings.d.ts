@@ -6,6 +6,8 @@
 
 import type { Rectangle } from "electron";
 
+import type { MooncordTabRecord } from "./mooncordTabs";
+
 export interface Settings {
     discordBranch: "stable" | "canary" | "ptb";
     transparencyOption: "none" | "mica" | "tabbed" | "acrylic";
@@ -61,7 +63,7 @@ export interface State {
     minimized?: boolean;
     windowBounds?: Rectangle;
 
-    mooncordTabs?: Array<{ id: string; path: string; title: string }>;
+    mooncordTabs?: MooncordTabRecord[];
     activeMooncordTabId?: string;
 
     steamOSLayoutVersion?: number;

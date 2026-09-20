@@ -4,28 +4,37 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { MooncordTabsState } from "shared/mooncordTabs";
+import {
+    MAX_MOONCORD_TABS,
+    MOONCORD_TAB_TITLE_MAX_LENGTH,
+    MOONCORD_TOOLBAR_HEIGHT,
+    type MooncordTabsState
+} from "shared/mooncordTabs";
 
 const SHELL_ID = "mooncord-shell";
 
+export interface MooncordShellNativeApi {
+    getState(): Promise<MooncordTabsState>;
+    onStateChanged(callback: (state: MooncordTabsState) => void): () => void;
+    selectTab(id: string): Promise<MooncordTabsState>;
+    createTab(): Promise<MooncordTabsState>;
+    closeTab(id: string): Promise<MooncordTabsState>;
+    renameTab(id: string, title: string): Promise<MooncordTabsState>;
+    reorderTab(id: string, targetId: string, after: boolean): Promise<MooncordTabsState>;
+    resetTabs(): Promise<MooncordTabsState>;
+    openDiscordSettings(): Promise<void>;
+    goBack(): Promise<void>;
+    goForward(): Promise<void>;
+    reload(): Promise<void>;
+    minimize(): Promise<void>;
+    maximize(): Promise<void>;
+    closeWindow(): Promise<void>;
+    toggleDevTools(): Promise<void>;
+}
+
 declare global {
     interface Window {
-        MooncordShellNative: {
-            getState(): Promise<MooncordTabsState>;
-            onStateChanged(callback: (state: MooncordTabsState) => void): () => void;
-            selectTab(id: string): Promise<MooncordTabsState>;
-            createTab(): Promise<MooncordTabsState>;
-            closeTab(id: string): Promise<MooncordTabsState>;
-            resetTabs(): Promise<MooncordTabsState>;
-            openDiscordSettings(): Promise<void>;
-            goBack(): Promise<void>;
-            goForward(): Promise<void>;
-            reload(): Promise<void>;
-            minimize(): Promise<void>;
-            maximize(): Promise<void>;
-            closeWindow(): Promise<void>;
-            toggleDevTools(): Promise<void>;
-        };
+        MooncordShellNative: MooncordShellNativeApi;
     }
 }
 
@@ -39,7 +48,7 @@ html, body { background: #191b20; color: #f1f3f8; height: 100%; margin: 0; overf
     border-bottom: 1px solid rgba(255,255,255,.09);
     display: flex;
     gap: 10px;
-    height: 54px;
+    height: ${MOONCORD_TOOLBAR_HEIGHT}px;
     left: 0;
     padding: 0 8px 0 12px;
     position: fixed;
@@ -58,7 +67,9 @@ html, body { background: #191b20; color: #f1f3f8; height: 100%; margin: 0; overf
 #${SHELL_ID} .mooncord-brand-status { align-items: center; color: #aab1bf; display: flex; font-size: 10px; gap: 5px; margin-top: 4px; }
 #${SHELL_ID} .mooncord-status-dot { background: #45cf91; border-radius: 50%; height: 6px; width: 6px; }
 #${SHELL_ID} .mooncord-nav, #${SHELL_ID} .mooncord-window-controls { align-items: center; display: flex; flex: 0 0 auto; gap: 2px; }
-#${SHELL_ID} .mooncord-tabs { align-items: center; display: flex; flex: 1 1 auto; gap: 5px; min-width: 0; overflow: hidden; }
+#${SHELL_ID} .mooncord-tabs { align-items: center; display: flex; flex: 1 1 auto; gap: 5px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-color: #4f5666 transparent; scrollbar-width: thin; }
+#${SHELL_ID} .mooncord-tabs::-webkit-scrollbar { height: 5px; }
+#${SHELL_ID} .mooncord-tabs::-webkit-scrollbar-thumb { background: #4f5666; border-radius: 5px; }
 #${SHELL_ID} button { align-items: center; background: transparent; border: 0; border-radius: 7px; color: #b7bfce; cursor: pointer; display: inline-flex; font: inherit; justify-content: center; }
 #${SHELL_ID} button:hover { background: rgba(255,255,255,.1); color: white; }
 #${SHELL_ID} .mooncord-icon-button { font-size: 17px; height: 32px; width: 30px; }
@@ -67,6 +78,7 @@ html, body { background: #191b20; color: #f1f3f8; height: 100%; margin: 0; overf
 #${SHELL_ID} .mooncord-tab.active { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.2); color: white; }
 #${SHELL_ID} .mooncord-tab-icon { color: #e7e9ee; flex: 0 0 auto; font-size: 11px; }
 #${SHELL_ID} .mooncord-tab-label { flex: 1 1 auto; font-size: 12px; overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+#${SHELL_ID} .mooncord-tab-rename { background: #111419; border: 1px solid #687184; border-radius: 4px; color: white; flex: 1 1 auto; font: inherit; min-width: 0; outline: none; padding: 3px 4px; }
 #${SHELL_ID} .mooncord-tab-close { border-radius: 5px; flex: 0 0 auto; font-size: 15px; height: 22px; opacity: .75; width: 22px; }
 #${SHELL_ID} .mooncord-tab-close:hover { background: rgba(255,255,255,.13); opacity: 1; }
 #${SHELL_ID} .mooncord-add { flex: 0 0 auto; font-size: 20px; height: 32px; margin-left: 1px; width: 30px; }
@@ -89,7 +101,7 @@ function createButton(className: string, text: string, ariaLabel: string, action
     return button;
 }
 
-export function installMooncordShell() {
+export function installMooncordShell(native: MooncordShellNativeApi) {
     const install = async () => {
         if (!document.body || document.getElementById(SHELL_ID)) return;
         const style = document.createElement("style");
@@ -139,12 +151,12 @@ export function installMooncordShell() {
         shell.append(brand, nav, tabsContainer, addTabButton, tools, windowControls);
         document.body.append(shell);
 
-        const native = window.MooncordShellNative;
         let currentState: MooncordTabsState = { tabs: [], activeId: "" };
         let lastSignature = "";
+        let lastActiveId = "";
         addTabButton.addEventListener("click", event => {
             event.stopPropagation();
-            if (currentState.tabs.length >= 8) {
+            if (currentState.tabs.length >= MAX_MOONCORD_TABS) {
                 addTabButton.title = "Ya tienes el máximo de 8 pestañas. Cierra una para agregar otra.";
                 return;
             }
@@ -158,41 +170,115 @@ export function installMooncordShell() {
                     addTabButton.title = "No se pudo crear la pestaña. Abre DevTools para ver el error.";
                 })
                 .finally(() => {
-                    addTabButton.disabled = currentState.tabs.length >= 8;
+                    addTabButton.disabled = currentState.tabs.length >= MAX_MOONCORD_TABS;
                 });
         });
 
         const renderTabs = (state: MooncordTabsState) => {
             currentState = state;
-            addTabButton.disabled = state.tabs.length >= 8;
+            addTabButton.disabled = state.tabs.length >= MAX_MOONCORD_TABS;
             addTabButton.title = addTabButton.disabled
                 ? "Ya tienes el máximo de 8 pestañas. Cierra una para agregar otra."
                 : "Nueva pestaña";
-            const signature = `${state.activeId}|${state.tabs.map(tab => `${tab.id}:${tab.path}:${tab.title}`).join("\u0001")}`;
+            const signature = `${state.activeId}|${state.tabs
+                .map(tab => `${tab.id}:${tab.path}:${tab.title}:${tab.customTitle ?? ""}:${tab.loadStatus}`)
+                .join("\u0001")}`;
             if (signature === lastSignature) return;
             lastSignature = signature;
+            const previousScrollLeft = tabsContainer.scrollLeft;
             tabsContainer.replaceChildren();
             for (const tab of state.tabs) {
                 const tabElement = document.createElement("div");
                 tabElement.className = `mooncord-tab${tab.id === state.activeId ? " active" : ""}`;
                 tabElement.setAttribute("role", "tab");
                 tabElement.setAttribute("aria-selected", String(tab.id === state.activeId));
-                tabElement.title = tab.path;
+                const displayTitle = tab.customTitle || tab.title;
+                const crashed = tab.loadStatus === "crashed";
+                tabElement.title = crashed
+                    ? `${tab.path} · Renderer detenido. Haz clic para volver a cargar.`
+                    : `${tab.path} · Doble clic para cambiar el nombre; arrastra para reordenar.`;
+                tabElement.setAttribute("aria-label", crashed ? `${displayTitle}, pestaña detenida` : displayTitle);
+                tabElement.draggable = true;
                 const icon = document.createElement("span");
                 icon.className = "mooncord-tab-icon";
-                icon.textContent = tab.id === state.activeId ? "●" : "○";
+                icon.textContent = crashed ? "!" : tab.id === state.activeId ? "●" : "○";
                 const label = document.createElement("span");
                 label.className = "mooncord-tab-label";
-                label.textContent = tab.title;
-                const close = createButton("mooncord-tab-close", "×", `Cerrar ${tab.title}`, "close-tab");
+                label.textContent = displayTitle;
+                label.addEventListener("dblclick", event => {
+                    event.stopPropagation();
+                    beginRename(tab.id, displayTitle, tabElement, label);
+                });
+                const close = createButton("mooncord-tab-close", "×", `Cerrar ${displayTitle}`, "close-tab");
                 close.addEventListener("click", event => {
                     event.stopPropagation();
                     void native.closeTab(tab.id);
                 });
+                close.draggable = false;
                 tabElement.append(icon, label, close);
                 tabElement.addEventListener("click", () => void native.selectTab(tab.id));
+                tabElement.addEventListener("dragstart", event => {
+                    if ((event.target as HTMLElement).closest("button, input")) {
+                        event.preventDefault();
+                        return;
+                    }
+                    event.dataTransfer?.setData("text/plain", tab.id);
+                    if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+                });
+                tabElement.addEventListener("dragover", event => {
+                    event.preventDefault();
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+                });
+                tabElement.addEventListener("drop", event => {
+                    event.preventDefault();
+                    const sourceId = event.dataTransfer?.getData("text/plain");
+                    if (!sourceId || sourceId === tab.id) return;
+                    const rect = tabElement.getBoundingClientRect();
+                    void native
+                        .reorderTab(sourceId, tab.id, event.clientX >= rect.left + rect.width / 2)
+                        .catch(error => console.error("No se pudo reordenar la pestaña de Mooncord:", error));
+                });
                 tabsContainer.appendChild(tabElement);
             }
+            tabsContainer.scrollLeft = previousScrollLeft;
+            if (state.activeId !== lastActiveId) {
+                tabsContainer.querySelector<HTMLElement>(".mooncord-tab.active")?.scrollIntoView({
+                    block: "nearest",
+                    inline: "nearest"
+                });
+            }
+            lastActiveId = state.activeId;
+        };
+
+        const beginRename = (id: string, currentTitle: string, tabElement: HTMLElement, label: HTMLElement) => {
+            const input = document.createElement("input");
+            input.type = "text";
+            input.value = currentTitle;
+            input.maxLength = MOONCORD_TAB_TITLE_MAX_LENGTH;
+            input.setAttribute("aria-label", `Nuevo nombre para ${currentTitle}`);
+            input.className = "mooncord-tab-rename";
+            let finished = false;
+            const finish = (save: boolean) => {
+                if (finished) return;
+                finished = true;
+                if (save) {
+                    void native.renameTab(id, input.value).catch(error => {
+                        console.error("No se pudo cambiar el nombre de la pestaña de Mooncord:", error);
+                    });
+                }
+                lastSignature = "";
+                renderTabs(currentState);
+            };
+            input.addEventListener("click", event => event.stopPropagation());
+            input.addEventListener("keydown", event => {
+                if (event.key === "Enter") finish(true);
+                if (event.key === "Escape") finish(false);
+            });
+            input.addEventListener("blur", () => finish(true));
+            tabElement.draggable = false;
+            label.replaceWith(input);
+            input.focus();
+            input.select();
         };
 
         shell.addEventListener("click", event => {
@@ -221,6 +307,15 @@ export function installMooncordShell() {
         document.addEventListener("click", event => {
             if (!tools.contains(event.target as Node)) menu.classList.remove("open");
         });
+        tabsContainer.addEventListener(
+            "wheel",
+            event => {
+                if (event.ctrlKey || Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+                tabsContainer.scrollLeft += event.deltaY;
+                event.preventDefault();
+            },
+            { passive: false }
+        );
         window.addEventListener("keydown", event => {
             if (event.ctrlKey && event.key === "Tab" && currentState.tabs.length > 1) {
                 event.preventDefault();
