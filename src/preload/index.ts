@@ -8,7 +8,6 @@ import { contextBridge, ipcRenderer, webFrame } from "electron/renderer";
 
 import { IpcEvents } from "../shared/IpcEvents";
 import { VesktopNative } from "./VesktopNative";
-import { installMooncordShell } from "./mooncordShell";
 
 contextBridge.exposeInMainWorld("VesktopNative", VesktopNative);
 
@@ -58,9 +57,11 @@ const MOONCORD_PAGE_PASSKEY_GUARD = `(() => {
 // public-key credential operations inside Mooncord; Windows Hello itself and
 // all non-passkey credential APIs remain untouched.
 function disableAutomaticPasskeys() {
-    const credentials = navigator.credentials as (CredentialsContainer & {
-        __mooncordPasskeyGuard?: boolean;
-    }) | null;
+    const credentials = navigator.credentials as
+        | (CredentialsContainer & {
+              __mooncordPasskeyGuard?: boolean;
+          })
+        | null;
     if (!credentials || credentials.__mooncordPasskeyGuard) return;
 
     const prototype = Object.getPrototypeOf(credentials) as CredentialsContainer;
@@ -112,5 +113,3 @@ Function(
 
 webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VENCORD_RENDERER_SCRIPT));
 webFrame.executeJavaScript(ipcRenderer.sendSync(IpcEvents.GET_VESKTOP_RENDERER_SCRIPT));
-
-installMooncordShell();

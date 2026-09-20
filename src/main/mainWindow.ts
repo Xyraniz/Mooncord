@@ -1,6 +1,6 @@
 /*
  * Vesktop, a desktop app aiming to give you a snappier Discord Experience
- * Copyright (c) 2023 Vendicated and Vencord contributors
+ * Copyright (c) 2026 Vendicated and Vesktop contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
@@ -16,7 +16,7 @@ import {
     session
 } from "electron";
 import { join } from "path";
-import { IpcCommands, IpcEvents } from "shared/IpcEvents";
+import { IpcCommands } from "shared/IpcEvents";
 import { isTruthy } from "shared/utils/guards";
 import { once } from "shared/utils/once";
 import type { SettingsStore } from "shared/utils/SettingsStore";
@@ -24,12 +24,13 @@ import type { SettingsStore } from "shared/utils/SettingsStore";
 import { createAboutWindow } from "./about";
 import { initArRPC } from "./arrpc";
 import { CommandLine } from "./cli";
-import { BrowserUserAgent, DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+import { DEFAULT_HEIGHT, DEFAULT_WIDTH, MIN_HEIGHT, MIN_WIDTH } from "./constants";
+import { initializeDiscordTabs, toggleActiveDiscordDevTools } from "./discordTabs";
 import { AppEvents } from "./events";
 import { sendRendererCommand } from "./ipcCommands";
 import { darwinURL } from "./main";
 import { Settings, State, VencordSettings } from "./settings";
-import { createSplashWindow, updateSplashMessage } from "./splash";
+import { createSplashWindow } from "./splash";
 import { destroyTray, initTray } from "./tray";
 import { clearData } from "./utils/clearData";
 import { makeLinksOpenExternally } from "./utils/makeLinksOpenExternally";
@@ -251,10 +252,10 @@ function initSettingsListeners(win: BrowserWindow) {
         win.setAutoHideMenuBar(enabled ?? false);
     });
 
-    addSettingsListener("spellCheckLanguages", languages => initSpellCheckLanguages(win, languages));
+    addSettingsListener("spellCheckLanguages", languages => initSpellCheckLanguages(languages));
 }
 
-async function initSpellCheckLanguages(win: BrowserWindow, languages?: string[]) {
+async function initSpellCheckLanguages(languages?: string[]) {
     languages ??= await sendRendererCommand(IpcCommands.GET_LANGUAGES);
     if (!languages) return;
 
@@ -263,23 +264,6 @@ async function initSpellCheckLanguages(win: BrowserWindow, languages?: string[])
     const available = ses.availableSpellCheckerLanguages;
     const applicable = languages.filter(l => available.includes(l)).slice(0, 5);
     if (applicable.length) ses.setSpellCheckerLanguages(applicable);
-}
-
-function initSpellCheck(win: BrowserWindow) {
-    win.webContents.on("context-menu", (_, data) => {
-        win.webContents.send(IpcEvents.SPELLCHECK_RESULT, data.misspelledWord, data.dictionarySuggestions);
-    });
-
-    initSpellCheckLanguages(win, Settings.store.spellCheckLanguages);
-}
-
-function initDevtoolsListeners(win: BrowserWindow) {
-    win.webContents.on("devtools-opened", () => {
-        win.webContents.send(IpcEvents.DEVTOOLS_OPENED);
-    });
-    win.webContents.on("devtools-closed", () => {
-        win.webContents.send(IpcEvents.DEVTOOLS_CLOSED);
-    });
 }
 
 function initStaticTitle(win: BrowserWindow) {
@@ -355,7 +339,7 @@ function buildBrowserWindowOptions(): BrowserWindowConstructorOptions {
             sandbox: true,
             contextIsolation: true,
             devTools: true,
-            preload: join(__dirname, "preload.js"),
+            preload: join(__dirname, "shellPreload.js"),
             spellcheck: true,
             // disable renderer backgrounding to prevent the app from unloading when in the background
             backgroundThrottling: false
@@ -405,10 +389,8 @@ function createMainWindow() {
 
     const win = (mainWin = new BrowserWindow(buildBrowserWindowOptions()));
 
-    // Keep Discord fully responsive while Mooncord is visible, but let
-    // Chromium throttle background timers/render work when the window is
-    // hidden or minimized. WebSockets and the network process remain alive,
-    // so messages and notifications can still arrive in the background.
+    // The shell is separate from the Discord views. Discord tab renderers
+    // keep background throttling disabled so hidden tabs retain their state.
     const syncBackgroundThrottling = () => {
         if (!win.isDestroyed()) win.webContents.setBackgroundThrottling(!win.isVisible() || win.isMinimized());
     };
@@ -444,58 +426,19 @@ function createMainWindow() {
     initMenuBar(win);
     makeLinksOpenExternally(win);
     initSettingsListeners(win);
-    initSpellCheck(win);
-    initDevtoolsListeners(win);
     initStaticTitle(win);
 
     win.webContents.on("before-input-event", (event, input) => {
         if (input.type === "keyDown" && input.key === "F12") {
             event.preventDefault();
-            win.webContents.toggleDevTools();
+            toggleActiveDiscordDevTools();
         }
     });
-
-    win.webContents.setUserAgent(BrowserUserAgent);
-
-    win.webContents.on("will-navigate", (event, url) => {
-        try {
-            const protocol = new URL(url).protocol.toLowerCase();
-            if (["discord:", "discordapp:", "discord-canary:", "discord-ptb:"].includes(protocol)) {
-                event.preventDefault();
-                console.info("Blocked Discord native-app hand-off:", protocol);
-            }
-        } catch {
-            event.preventDefault();
-        }
-    });
-
-    // if the open-url event is fired (in index.ts) while starting up, darwinURL will be set. If not fall back to checking the process args (which Windows and Linux use for URI calling.)
-    // win.webContents.session.clearCache().then(() => {
-    loadUrl(darwinURL || process.argv.find(arg => arg.startsWith("discord://")));
-    // });
 
     return win;
 }
 
 const runVencordMain = once(() => require(join(VENCORD_FILES_DIR, "vencordDesktopMain.js")));
-
-export function loadUrl(uri: string | undefined) {
-    const branch = Settings.store.discordBranch;
-    const subdomain = branch === "canary" || branch === "ptb" ? `${branch}.` : "";
-
-    // we do not rely on 'did-finish-load' because it fires even if loadURL fails which triggers early detruction of the splash
-    mainWin
-        .loadURL(`https://${subdomain}discord.com/${uri ? new URL(uri).pathname.slice(1) || "app" : "app"}`)
-        .then(() => AppEvents.emit("appLoaded"))
-        .catch(error => retryUrl(error.url, error.code));
-}
-
-const retryDelay = 1000;
-function retryUrl(url: string, description: string) {
-    console.log(`retrying in ${retryDelay}ms`);
-    updateSplashMessage(`Failed to load Discord: ${description}`);
-    setTimeout(() => loadUrl(url), retryDelay);
-}
 
 export async function createWindows() {
     const startMinimized = CommandLine.values["start-minimized"];
@@ -515,6 +458,7 @@ export async function createWindows() {
 
     AppEvents.on("appLoaded", () => {
         splash?.destroy();
+        void initSpellCheckLanguages(Settings.store.spellCheckLanguages);
 
         if (!startMinimized) {
             if (splash) mainWin!.show();
@@ -535,16 +479,7 @@ export async function createWindows() {
         });
     });
 
-    mainWin.webContents.on("did-navigate", (_, url: string, responseCode: number) => {
-        updateSplashMessage(""); // clear the splash message
-
-        // check url to ensure app doesn't loop
-        if (responseCode >= 300 && new URL(url).pathname !== `/app`) {
-            loadUrl(undefined);
-            console.warn(`'did-navigate': Caught bad page response: ${responseCode}, redirecting to main app`);
-        }
-    });
-
-    mainWin.webContents.on("render-process-gone", (event, details) => console.log(details));
+    const deepLink = darwinURL || process.argv.find(arg => arg.startsWith("discord://"));
+    initializeDiscordTabs(mainWin, deepLink);
     initArRPC();
 }

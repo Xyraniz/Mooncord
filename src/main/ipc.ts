@@ -18,7 +18,7 @@ import {
     session,
     shell
 } from "electron";
-import { readFileSync, watch } from "fs";
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, watch } from "fs";
 import { readFile, stat } from "fs/promises";
 import { release } from "os";
 import { join } from "path";
@@ -26,6 +26,13 @@ import { join } from "path";
 import { IpcEvents } from "../shared/IpcEvents";
 import { setBadgeCount } from "./appBadge";
 import { autoStart } from "./autoStart";
+import { VENCORD_SETTINGS_DIR } from "./constants";
+import {
+    broadcastToDiscordTabs,
+    getActiveDiscordWebContents,
+    getDiscordTabForWebContents,
+    toggleActiveDiscordDevTools
+} from "./discordTabs";
 import { enableHardwareAcceleration } from "./main";
 import { mainWin } from "./mainWindow";
 import { Settings, State } from "./settings";
@@ -49,7 +56,7 @@ handle(IpcEvents.GET_VESKTOP_RENDERER_CSS, () => readFile(VESKTOP_RENDERER_CSS_P
 
 if (IS_DEV) {
     watch(VESKTOP_RENDERER_CSS_PATH, { persistent: false }, async () => {
-        mainWin?.webContents.postMessage(
+        broadcastToDiscordTabs(
             IpcEvents.VESKTOP_RENDERER_CSS_UPDATE,
             await readFile(VESKTOP_RENDERER_CSS_PATH, "utf-8")
         );
@@ -71,6 +78,27 @@ handle(IpcEvents.DISABLE_AUTOSTART, autoStart.disable);
 
 handle(IpcEvents.SET_SETTINGS, (_, settings: typeof Settings.store, path?: string) => {
     Settings.setData(settings, path);
+});
+
+handle(IpcEvents.IMPORT_VENCORD_SETTINGS, () => {
+    const sourceDirectory = join(app.getPath("userData"), "..", "Vencord", "settings");
+
+    try {
+        const files = readdirSync(sourceDirectory, { withFileTypes: true }).filter(entry => entry.isFile());
+        if (!files.length) return "empty";
+
+        mkdirSync(VENCORD_SETTINGS_DIR, { recursive: true });
+        for (const file of files) {
+            copyFileSync(join(sourceDirectory, file.name), join(VENCORD_SETTINGS_DIR, file.name));
+        }
+
+        return "ok";
+    } catch (error) {
+        if (error instanceof Error && "code" in error && error.code === "ENOENT") return "not-found";
+
+        console.error("Failed to import existing Vencord settings:", error);
+        return "failed";
+    }
 });
 
 handle(IpcEvents.RELAUNCH, async () => {
@@ -182,6 +210,8 @@ handle(IpcEvents.DEBUG_LAUNCH_GPU, () => openDebugPage("chrome://gpu"));
 handle(IpcEvents.DEBUG_LAUNCH_WEBRTC_INTERNALS, () => openDebugPage("chrome://webrtc-internals"));
 
 handle(IpcEvents.TOGGLE_DEVTOOLS, e => {
-    const win = BrowserWindow.fromWebContents(e.sender) ?? mainWin;
-    if (!win.isDestroyed()) win.webContents.toggleDevTools();
+    const tab = getDiscordTabForWebContents(e.sender);
+    if (tab) tab.view.webContents.toggleDevTools();
+    else if (e.sender === mainWin?.webContents) toggleActiveDiscordDevTools();
+    else getActiveDiscordWebContents()?.toggleDevTools();
 });

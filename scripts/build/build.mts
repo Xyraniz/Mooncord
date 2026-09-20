@@ -96,6 +96,12 @@ await Promise.all([
     }),
     createContext({
         ...NodeCommonOpts,
+        entryPoints: ["src/preload/shell.ts"],
+        outfile: "dist/js/shellPreload.js",
+        footer: { js: "//# sourceURL=MooncordShellPreload" }
+    }),
+    createContext({
+        ...NodeCommonOpts,
         entryPoints: ["src/preload/splash.ts"],
         outfile: "dist/js/splashPreload.js",
         footer: { js: "//# sourceURL=VesktopSplashPreload" }

@@ -16,6 +16,7 @@ import { isMac } from "renderer/utils";
 import { AutoStartToggle } from "./AutoStartToggle";
 import { DeveloperOptionsButton } from "./DeveloperOptions";
 import { DiscordBranchPicker } from "./DiscordBranchPicker";
+import { ImportVencordSettings } from "./ImportVencordSettings";
 import { NotificationBadgeToggle } from "./NotificationBadgeToggle";
 import { OutdatedVesktopWarning } from "./OutdatedVesktopWarning";
 import { UserAssetsButton } from "./UserAssets";
@@ -148,6 +149,7 @@ const SettingsOptions: Record<string, Array<BooleanSetting | SettingsComponent>>
         WebRTCIPHandlingPolicyPicker
     ],
 
+    Vencord: [ImportVencordSettings],
     "Developer Options": [DeveloperOptionsButton]
 };
 

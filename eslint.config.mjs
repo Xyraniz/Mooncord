@@ -6,6 +6,8 @@
 
 //@ts-check
 
+import { readFileSync } from "node:fs";
+
 import { defineConfig } from "eslint/config";
 import stylistic from "@stylistic/eslint-plugin";
 import pathAlias from "eslint-plugin-path-alias";
@@ -64,7 +66,7 @@ export default defineConfig(
             "simpleHeader/header": [
                 "error",
                 {
-                    files: ["scripts/header.txt"],
+                    text: readFileSync("scripts/header.txt", "utf8").replace(/\r\n/g, "\n").trim(),
                     templates: { author: [".*", "Vendicated and Vesktop contributors"] }
                 }
             ],

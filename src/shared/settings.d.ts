@@ -61,7 +61,8 @@ export interface State {
     minimized?: boolean;
     windowBounds?: Rectangle;
 
-    firstLaunch?: boolean;
+    mooncordTabs?: Array<{ id: string; path: string; title: string }>;
+    activeMooncordTabId?: string;
 
     steamOSLayoutVersion?: number;
     linuxAutoStartEnabled?: boolean;

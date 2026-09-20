@@ -57,7 +57,8 @@ export const VesktopNative = {
     },
     settings: {
         get: () => sendSync<Settings>(IpcEvents.GET_SETTINGS),
-        set: (settings: Settings, path?: string) => invoke<void>(IpcEvents.SET_SETTINGS, settings, path)
+        set: (settings: Settings, path?: string) => invoke<void>(IpcEvents.SET_SETTINGS, settings, path),
+        importVencordSettings: () => invoke<"empty" | "failed" | "not-found" | "ok">(IpcEvents.IMPORT_VENCORD_SETTINGS)
     },
     spellcheck: {
         getAvailableLanguages: () => sendSync<string[]>(IpcEvents.SPELLCHECK_GET_AVAILABLE_LANGUAGES),

@@ -13,6 +13,7 @@ Mooncord is not affiliated with Discord Inc. You still sign in through Discord's
 ## What Mooncord includes
 
 - A custom Mooncord title bar with window controls and lightweight navigation tabs.
+- Up to eight Discord tabs, each with its own live client view. Switching tabs preserves the open chat and its in-memory state; tabs share one signed-in account session.
 - Discord's real-time web client, including messages, servers, calls, notifications, and account settings.
 - Vencord integration for optional client plugins. Vencord is an integration layer in Mooncord, not a second Discord client or a replacement for Discord's service.
 - A dark, monochrome Mooncord theme and branded splash, tray, and application icons.
@@ -21,6 +22,7 @@ Mooncord is not affiliated with Discord Inc. You still sign in through Discord's
 - Targeted removal of known Discord desktop-download promotions without hiding generic Discord layout containers.
 - A persistent portable data directory so cookies, settings, and the Discord session survive closing and reopening the portable executable.
 - `F12` or the Tools menu to open DevTools when troubleshooting the client.
+- No first-run setup window. Discord branch, Rich Presence, tray behavior, and startup options are available from Discord Settings; existing Vencord settings can be imported there.
 
 ## Getting Mooncord
 

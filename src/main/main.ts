@@ -13,11 +13,10 @@ import "./vesktopProtocol";
 import { app, BrowserWindow, nativeTheme } from "electron";
 
 import { DATA_DIR } from "./constants";
-import { createFirstLaunchTour } from "./firstLaunch";
 import { createWindows, mainWin } from "./mainWindow";
 import { registerMediaPermissionsHandler } from "./mediaPermissions";
 import { registerScreenShareHandler } from "./screenShare";
-import { Settings, State } from "./settings";
+import { Settings } from "./settings";
 import { setAsDefaultProtocolClient } from "./utils/setAsDefaultProtocolClient";
 import { isDeckGameMode } from "./utils/steamOS";
 
@@ -126,12 +125,8 @@ if (!app.requestSingleInstanceLock({ IS_DEV })) {
     init();
 }
 
-async function bootstrap() {
-    if (!Object.hasOwn(State.store, "firstLaunch")) {
-        createFirstLaunchTour();
-    } else {
-        createWindows();
-    }
+function bootstrap() {
+    createWindows();
 }
 
 // MacOS only event
