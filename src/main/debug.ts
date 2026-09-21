@@ -12,10 +12,8 @@ import { format } from "util";
 
 import { DATA_DIR } from "./constants";
 
-// Flip this single switch to false for a normal release build. The requested
-// review build intentionally keeps it enabled so every process reports into a
-// visible CMD window as well as a durable log file.
-export const MOONCORD_DEBUG_BUILD = true;
+// Keep normal builds from opening a detached PowerShell/CMD debug console.
+export const MOONCORD_DEBUG_BUILD = false;
 
 const DEBUG_LOG_FILE = join(DATA_DIR, "logs", "mooncord-debug.log");
 const DEBUG_CONSOLE_LOCK_FILE = join(DATA_DIR, "logs", "mooncord-debug-console.lock");

@@ -674,6 +674,16 @@ export const Devs = /* #__PURE__*/ Object.freeze({
         name: "Kaede",
         id: 1492642701320126504n
     },
+    Aurick: {
+        name: "Aurick",
+        id: 1348025017233047634n,
+        badge: false
+    },
+    appleflyer: {
+        name: "appleflyer",
+        id: 1209096766075703368n,
+        badge: false
+    },
     Keira: {
         name: "Keira",
         id: 320737951460098049n,
