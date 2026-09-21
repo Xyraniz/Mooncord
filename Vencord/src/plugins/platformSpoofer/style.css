@@ -1,0 +1,4 @@
+.platform-warning {
+    color: var(--status-warning);
+    font-weight: 600;
+}
