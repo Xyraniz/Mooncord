@@ -41,14 +41,16 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             }
 
             if (restartNeeded) {
-                // If any dependencies have patches, don't start the plugin yet.
+                // If a dependency explicitly requires a full restart, don't
+                // start the plugin yet.
                 settings.enabled = true;
                 onRestartNeeded(plugin.name, "enabled");
                 return;
             }
         }
 
-        // if the plugin requires a restart, don't use stopPlugin/startPlugin. Wait for restart to apply changes.
+        // Explicit restart-only plugins still defer their change. Normal
+        // plugins are started and stopped in the current session.
         if (pluginRequiresRestart(plugin)) {
             settings.enabled = !wasEnabled;
             onRestartNeeded(plugin.name, "enabled");

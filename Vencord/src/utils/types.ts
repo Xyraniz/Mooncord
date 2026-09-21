@@ -156,7 +156,7 @@ export interface PluginDef {
      */
     enabledByDefault?: boolean;
     /**
-     * Whether enabling or disabling this plugin requires a restart. Defaults to true if the plugin has patches.
+     * Whether enabling or disabling this plugin requires a full application restart.
      */
     requiresRestart?: boolean;
     /**

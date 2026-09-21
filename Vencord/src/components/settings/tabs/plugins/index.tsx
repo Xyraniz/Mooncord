@@ -53,9 +53,9 @@ function ReloadRequiredCard({ required }: { required: boolean; }) {
             {required
                 ? (
                     <>
-                        <HeadingTertiary>Restart required!</HeadingTertiary>
+                        <HeadingTertiary>Restart required for setting changes</HeadingTertiary>
                         <Paragraph className={cl("dep-text")}>
-                            Restart now to apply new plugins and their settings
+                            Restart now to apply the plugin settings that require it
                         </Paragraph>
                         <Button onClick={() => location.reload()} className={cl("restart-button")}>
                             Restart
@@ -127,14 +127,14 @@ function PluginSettings() {
             openModal(props => (
                 <ConfirmModal
                     {...props}
-                    title="Restart required"
+                    title="Restart required for setting changes"
                     confirmText="Restart now"
                     cancelText="Later!"
                     variant="primary"
                     onConfirm={() => location.reload()}
                 >
                     <>
-                        <p>The following plugins require a restart:</p>
+                        <p>The following plugin settings require a restart:</p>
                         <div>{changes.map((s, i) => (
                             <React.Fragment key={s}>
                                 {i > 0 && ", "}

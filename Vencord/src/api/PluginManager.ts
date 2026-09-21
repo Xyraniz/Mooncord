@@ -106,6 +106,53 @@ export function addPatch(newPatch: Omit<Patch, "plugin">, pluginName: string, pl
     patches.push(patch);
 }
 
+/**
+ * Patches are normally registered while the plugin manager is initialised.
+ * Keeping track of the patches registered for each plugin lets the settings
+ * page start and stop plugins without requiring a full application restart.
+ */
+const registeredPluginPatches = new Map<string, Patch[]>();
+
+export function registerPluginPatches(p: Plugin) {
+    if (!p.patches?.length || registeredPluginPatches.has(p.name)) return;
+
+    const registeredPatches: Patch[] = [];
+    for (const sourcePatch of p.patches) {
+        // addPatch canonicalises and filters its argument in place. Clone
+        // the patch and its replacements so toggling a plugin never mutates
+        // the plugin definition or loses a setting predicate permanently.
+        const patch = {
+            ...sourcePatch,
+            replacement: Array.isArray(sourcePatch.replacement)
+                ? sourcePatch.replacement.map(replacement => ({ ...replacement }))
+                : { ...sourcePatch.replacement }
+        } as Patch;
+
+        addPatch(patch, p.name);
+
+        // `addPatch` can skip patches whose predicate is currently false.
+        // Keep only patches that were actually registered so they can be
+        // removed again when the plugin is disabled.
+        if (patch.plugin === p.name && patches.includes(patch)) {
+            registeredPatches.push(patch);
+        }
+    }
+
+    registeredPluginPatches.set(p.name, registeredPatches);
+}
+
+export function unregisterPluginPatches(p: Plugin) {
+    const registeredPatches = registeredPluginPatches.get(p.name);
+    if (!registeredPatches) return;
+
+    for (const patch of registeredPatches) {
+        const index = patches.indexOf(patch);
+        if (index !== -1) patches.splice(index, 1);
+    }
+
+    registeredPluginPatches.delete(p.name);
+}
+
 function isReporterTestable(p: Plugin, part: ReporterTestable) {
     return p.reporterTestable == null
         ? true
@@ -113,7 +160,9 @@ function isReporterTestable(p: Plugin, part: ReporterTestable) {
 }
 
 export function pluginRequiresRestart(p: Plugin) {
-    return p.requiresRestart !== false && (p.requiresRestart || !!p.patches?.length);
+    // Patches are registered when a plugin is enabled, so having patches is
+    // no longer enough to require a full application restart.
+    return p.requiresRestart === true;
 }
 
 export const startAllPlugins = traceFunction("startAllPlugins", function startAllPlugins(target: StartAt) {
@@ -207,6 +256,8 @@ export const startPlugin = traceFunction("startPlugin", function startPlugin(p: 
         chatBarButton, renderMemberListDecorator, renderMessageAccessory, renderMessageDecoration, messagePopoverButton
     } = p;
 
+    registerPluginPatches(p);
+
     if (p.start) {
         logger.info("Starting plugin", name);
         if (p.started) {
@@ -217,6 +268,7 @@ export const startPlugin = traceFunction("startPlugin", function startPlugin(p: 
             p.start();
         } catch (e) {
             logger.error(`Failed to start ${name}\n`, e);
+            unregisterPluginPatches(p);
             return false;
         }
     }
@@ -321,6 +373,8 @@ export const stopPlugin = traceFunction("stopPlugin", function stopPlugin(p: Plu
     if (renderMessageAccessory) removeMessageAccessory(name);
     if (messagePopoverButton) removeMessagePopoverButton(name);
 
+    unregisterPluginPatches(p);
+
     return true;
 }, p => `stopPlugin ${p.name}`);
 
@@ -339,34 +393,38 @@ export const initPluginManager = onlyOnce(function init() {
     //
     // FIXME: might need to revisit this if there's ever nested (dependencies of dependencies) dependencies since this only
     // goes for the top level and their children, but for now this works okay with the current API plugins
-    for (const p of pluginsValues) if (isPluginEnabled(p.name)) {
-        p.dependencies?.forEach(d => {
-            const dep = Plugins[d];
+    for (const p of pluginsValues) {
+        if (isPluginEnabled(p.name)) {
+            p.dependencies?.forEach(d => {
+                const dep = Plugins[d];
 
-            if (!dep) {
-                const error = new Error(`Plugin ${p.name} has unresolved dependency ${d}`);
+                if (!dep) {
+                    const error = new Error(`Plugin ${p.name} has unresolved dependency ${d}`);
 
-                if (IS_DEV) {
-                    throw error;
+                    if (IS_DEV) {
+                        throw error;
+                    }
+
+                    logger.warn(error);
+                    return;
                 }
 
-                logger.warn(error);
-                return;
-            }
+                settings[d].enabled = true;
+                dep.isDependency = true;
+            });
 
-            settings[d].enabled = true;
-            dep.isDependency = true;
-        });
+            if (p.commands?.length) neededApiPlugins.add("CommandsAPI");
+            if (p.onBeforeMessageEdit || p.onBeforeMessageSend || p.onMessageClick) neededApiPlugins.add("MessageEventsAPI");
+            if (p.chatBarButton) neededApiPlugins.add("ChatInputButtonAPI");
+            if (p.renderMemberListDecorator) neededApiPlugins.add("MemberListDecoratorsAPI");
+            if (p.renderMessageAccessory) neededApiPlugins.add("MessageAccessoriesAPI");
+            if (p.renderMessageDecoration) neededApiPlugins.add("MessageDecorationsAPI");
+            if (p.messagePopoverButton) neededApiPlugins.add("MessagePopoverAPI");
+            if (p.userProfileBadge) neededApiPlugins.add("BadgeAPI");
+        }
 
-        if (p.commands?.length) neededApiPlugins.add("CommandsAPI");
-        if (p.onBeforeMessageEdit || p.onBeforeMessageSend || p.onMessageClick) neededApiPlugins.add("MessageEventsAPI");
-        if (p.chatBarButton) neededApiPlugins.add("ChatInputButtonAPI");
-        if (p.renderMemberListDecorator) neededApiPlugins.add("MemberListDecoratorsAPI");
-        if (p.renderMessageAccessory) neededApiPlugins.add("MessageAccessoriesAPI");
-        if (p.renderMessageDecoration) neededApiPlugins.add("MessageDecorationsAPI");
-        if (p.messagePopoverButton) neededApiPlugins.add("MessagePopoverAPI");
-        if (p.userProfileBadge) neededApiPlugins.add("BadgeAPI");
-
+        // Bind callbacks for disabled plugins as well. They can be enabled
+        // later from settings and must behave exactly like startup plugins.
         for (const key of pluginKeysToBind) {
             p[key] &&= p[key].bind(p) as any;
         }
@@ -389,9 +447,7 @@ export const initPluginManager = onlyOnce(function init() {
 
         if (p.patches && isPluginEnabled(p.name)) {
             if (!IS_REPORTER || isReporterTestable(p, ReporterTestable.Patches)) {
-                for (const patch of p.patches) {
-                    addPatch(patch, p.name);
-                }
+                registerPluginPatches(p);
             }
         }
     }
