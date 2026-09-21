@@ -23,6 +23,10 @@
         "test": "pnpm test:unit && pnpm lint && pnpm testTypes",
         "test:unit": "tsx --test test/mooncordTabs.test.ts test/pendingIpcCommands.test.ts",
         "testTypes": "tsc --noEmit",
+        "native:check": "cargo check --manifest-path native/Cargo.toml",
+        "native:test": "cargo test --manifest-path native/Cargo.toml",
+        "native:build": "cargo build --release --manifest-path native/Cargo.toml",
+        "native:run": "cargo run --manifest-path native/Cargo.toml",
         "watch": "pnpm build --watch",
         "generateMeta": "tsx scripts/utils/generateMeta.mts"
     },

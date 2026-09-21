@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mooncord Native</title>
+  <style>/* __MOONCORD_STYLES__ */</style>
+</head>
+<body>
+  <div id="login-screen" class="screen login-screen">
+    <div class="login-card">
+      <div class="brand-mark" aria-hidden="true">M</div>
+      <p class="eyebrow">MOONCORD NATIVE</p>
+      <h1>Conversaciones privadas, sin Discord Web</h1>
+      <p class="login-intro">Cliente nativo independiente para tus mensajes directos. La ventana usa recursos locales y Rust se encarga de la conexión con Discord.</p>
+      <form id="login-form" autocomplete="off">
+        <label for="email">Correo electrónico o teléfono</label>
+        <input id="email" name="email" type="text" autocomplete="off" spellcheck="false" placeholder="tu-correo@ejemplo.com">
+        <label for="password">Contraseña</label>
+        <input id="password" name="password" type="password" autocomplete="off" placeholder="Tu contraseña">
+        <button id="login-button" class="primary-button" type="submit">Iniciar sesión</button>
+      </form>
+      <p id="login-error" class="error-text" role="alert"></p>
+      <div class="legal-notice">
+        <strong>Aviso importante</strong>
+        <p>Mooncord is an unofficial Discord client. Client modifications may be against Discord’s Terms of Service. Using Mooncord may result in account restrictions or termination. You are responsible for reviewing Discord’s current policies before using this software.</p>
+      </div>
+      <p class="local-ui-note"><span class="status-dot connected"></span> Interfaz HTML local · sin cargar Discord Web</p>
+    </div>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
+    <aside class="rail" aria-label="Navegación">
+      <div class="rail-logo">M</div>
+      <button class="rail-button active" type="button" title="Mensajes directos" aria-label="Mensajes directos">✦</button>
+      <div class="rail-divider"></div>
+      <button class="rail-button muted" type="button" title="Próximamente" aria-label="Próximamente">+</button>
+    </aside>
+
+    <aside class="dm-sidebar">
+      <div class="sidebar-header">
+        <div>
+          <p class="eyebrow">MOONCORD</p>
+          <h2>Mensajes directos</h2>
+        </div>
+        <button id="add-friend-button" class="icon-button" type="button" title="Añadir amigo" aria-label="Añadir amigo">+</button>
+      </div>
+      <label class="search-box" for="dm-search">
+        <span aria-hidden="true">⌕</span>
+        <input id="dm-search" type="search" placeholder="Buscar o iniciar una conversación" autocomplete="off">
+      </label>
+      <div class="sidebar-section-title"><span>Conversaciones</span><span id="dm-count" class="count-badge">0</span></div>
+      <div id="dm-list" class="dm-list" role="list"></div>
+      <div id="dm-list-status" class="sidebar-status"></div>
+      <div class="account-bar">
+        <div id="account-avatar" class="avatar avatar-small">M</div>
+        <div class="account-copy"><strong id="account-name">Moonwalker</strong><span id="account-handle">@moonwalker</span></div>
+        <button id="logout-button" class="icon-button" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">↪</button>
+      </div>
+    </aside>
+
+    <main class="chat-panel">
+      <header class="chat-header">
+        <div class="conversation-heading">
+          <div id="conversation-avatar" class="avatar avatar-medium">?</div>
+          <div><h1 id="conversation-name">Selecciona una conversación</h1><p id="conversation-subtitle">Tus mensajes directos aparecerán aquí</p></div>
+        </div>
+        <div class="header-status"><span id="connection-dot" class="status-dot"></span><span id="connection-label">Desconectado</span><span id="sync-label" class="sync-label">Sin sincronizar</span></div>
+      </header>
+      <div id="notice" class="notice hidden" role="status"></div>
+      <div id="message-area" class="message-area">
+        <button id="load-more-button" class="load-more hidden" type="button">Cargar mensajes anteriores</button>
+        <div id="message-list" class="message-list"></div>
+      </div>
+      <form id="composer-form" class="composer hidden" autocomplete="off">
+        <textarea id="composer-input" rows="1" placeholder="Escribe un mensaje…" maxlength="2000"></textarea>
+        <button id="send-button" class="send-button" type="submit" title="Enviar mensaje" aria-label="Enviar mensaje">↑</button>
+      </form>
+      <div id="composer-status" class="composer-status"></div>
+    </main>
+
+    <aside class="profile-panel">
+      <div class="profile-cover"></div>
+      <div class="profile-content">
+        <div id="profile-avatar" class="avatar avatar-profile">M</div>
+        <h2 id="profile-name">Moonwalker</h2>
+        <p id="profile-handle">@moonwalker</p>
+        <div class="profile-divider"></div>
+        <p class="profile-label">Estado de sesión</p>
+        <p id="profile-connection" class="profile-value"><span class="status-dot"></span> Desconectado</p>
+        <button id="clear-cache-button" class="secondary-button" type="button">Borrar caché local</button>
+        <button id="diagnostics-button" class="quiet-button" type="button">Exportar diagnóstico</button>
+        <p class="profile-footnote">No se guardan mensajes completos indefinidamente. Los tokens se guardan en el almacenamiento seguro del sistema.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div id="add-friend-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="add-friend-title">
+    <div class="modal-card">
+      <div class="modal-header"><div><p class="eyebrow">CONTACTOS</p><h2 id="add-friend-title">Añadir amigo</h2></div><button id="close-modal-button" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+      <p class="modal-copy">Introduce el nombre de usuario o identificador de la persona.</p>
+      <label for="friend-identifier">Usuario</label>
+      <input id="friend-identifier" type="text" placeholder="nombredeusuario" autocomplete="off" spellcheck="false">
+      <p id="friend-error" class="error-text" role="alert"></p>
+      <button id="friend-submit-button" class="primary-button" type="button">Enviar solicitud</button>
+    </div>
+  </div>
+
+  <script>
+    // __MOONCORD_SCRIPT__
+  </script>
+</body>
+</html>

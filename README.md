@@ -93,6 +93,45 @@ pnpm start:dev
 pnpm start:watch
 ```
 
+## Mooncord Native
+
+This repository contains a second, independent client under [`native/`](native/).
+Mooncord Native is a Rust stable executable with its own native window (`tao`)
+and a bundled local HTML/CSS/JS interface rendered by `wry`. It never loads
+Discord Web, never navigates the UI to `discord.com`, and has no dependency on
+the Electron/Vencord runtime. On Windows, `wry` uses the installed system
+WebView2 renderer only to paint the bundled local interface; Discord network
+traffic is made by Rust through the REST API and the authorized Gateway.
+
+The existing Electron/Vencord client in `src/`, `Vencord/`, and `static/`
+remains in place and continues to use its existing commands and runtime. The
+two clients are developed and built independently; no Electron files are moved
+into `native/` and no Vencord code is imported into Rust.
+
+The first Native version focuses on direct-message authentication,
+conversations, messages, logout, secure token storage, and an authorized
+Gateway event architecture. It intentionally does not show servers or
+implement server channels, roles, moderation, voice, video, streaming,
+activities, attachment uploads, embeds, reactions, or threads. Received image
+attachments are displayed inline and other received files use a basic file
+card. See
+[`native/README.md`](native/README.md) for the security, Discord policy, and
+build notes.
+
+From the repository root:
+
+```sh
+pnpm native:check
+pnpm native:test
+pnpm native:build
+pnpm native:run
+```
+
+The release executable is written to
+`native/target/release/mooncord-native.exe` on Windows. The native client can
+also be run without pnpm using the equivalent Cargo commands documented in
+`native/README.md`.
+
 ## Creating a Windows portable build
 
 The normal Electron Builder commands are available for platform-specific development builds:
