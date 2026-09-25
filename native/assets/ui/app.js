@@ -382,7 +382,9 @@
 
   $("login-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    send("login", { email: $("email").value, password: $("password").value });
+    const passwordInput = $("password");
+    send("login", { email: $("email").value, password: passwordInput.value });
+    passwordInput.value = "";
   });
   $("composer-form").addEventListener("submit", (event) => {
     event.preventDefault();
